@@ -157,8 +157,20 @@ export function extractAnonymousBundles(bundlesDir: string, shareNums: number[])
   return shareNums.map(num => extractAnonymousBundle(bundlesDir, num));
 }
 
-// Known README filenames across all supported languages
-const README_FILENAMES = ['README', 'LEEME', 'LIESMICH', 'LISEZMOI', 'PREBERIME', 'LEIA-ME'];
+// Load README filenames from translations (source of truth)
+function loadReadmeFilenames(): string[] {
+  const translationsDir = path.join(__dirname, '..', 'internal', 'translations', 'readme');
+  const seen = new Set<string>();
+  for (const file of fs.readdirSync(translationsDir)) {
+    if (!file.endsWith('.json')) continue;
+    const data = JSON.parse(fs.readFileSync(path.join(translationsDir, file), 'utf8'));
+    if (data.readme_filename) {
+      seen.add(data.readme_filename);
+    }
+  }
+  return Array.from(seen);
+}
+const README_FILENAMES = loadReadmeFilenames();
 
 // Find the README .txt file in an extracted bundle directory (any language)
 export function findReadmeFile(bundleDir: string, ext: string = '.txt'): string {
@@ -234,6 +246,12 @@ export class RecoveryPage {
     await this.page.locator('#share-file-input').setInputFiles(pdfPaths);
   }
 
+  // Add bundle ZIP file directly (tests ZIP extraction)
+  async addBundleZip(bundlesDir: string, friendName: string): Promise<void> {
+    const zipPath = path.join(bundlesDir, `bundle-${friendName.toLowerCase()}.zip`);
+    await this.page.locator('#share-file-input').setInputFiles(zipPath);
+  }
+
   // Add manifest file — tries MANIFEST.age first, falls back to recover.html
   async addManifest(bundleDir?: string): Promise<void> {
     const dir = bundleDir || this.bundleDir;
@@ -299,6 +317,13 @@ export class RecoveryPage {
 
   async expectDownloadVisible(): Promise<void> {
     await expect(this.page.locator('#download-all-btn')).toBeVisible();
+  }
+
+  async expectNoLoadingIndicator(): Promise<void> {
+    // No loading indicator exists anymore (WASM was removed)
+    // Just verify body doesn't have a loading cursor
+    const cursor = await this.page.evaluate(() => document.body.style.cursor);
+    expect(cursor).not.toBe('wait');
   }
 
   async expectUIElements(): Promise<void> {

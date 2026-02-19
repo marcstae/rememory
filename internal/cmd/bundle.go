@@ -7,7 +7,6 @@ import (
 
 	"github.com/eljojo/rememory/internal/bundle"
 	"github.com/eljojo/rememory/internal/core"
-	"github.com/eljojo/rememory/internal/html"
 	"github.com/eljojo/rememory/internal/project"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +31,7 @@ Each bundle contains:
 
 func init() {
 	bundleCmd.Flags().String("recovery-url", core.DefaultRecoveryURL, "Base URL for QR code in PDF")
-	bundleCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 5 MB or less)")
+	bundleCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 10 MB or less)")
 	rootCmd.AddCommand(bundleCmd)
 }
 
@@ -59,12 +58,6 @@ func runBundle(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("project must be sealed before generating bundles (run 'rememory seal' first)")
 	}
 
-	// Get embedded recovery WASM binary (smaller, for bundles)
-	wasmBytes := html.GetRecoverWASMBytes()
-	if len(wasmBytes) == 0 {
-		return fmt.Errorf("recover.wasm not embedded - rebuild with 'make build'")
-	}
-
 	// Generate bundles
 	fmt.Printf("Generating bundles for %d friends...\n\n", len(p.Friends))
 
@@ -74,7 +67,6 @@ func runBundle(cmd *cobra.Command, args []string) error {
 	cfg := bundle.Config{
 		Version:          version,
 		GitHubReleaseURL: fmt.Sprintf("https://github.com/eljojo/rememory/releases/tag/%s", version),
-		WASMBytes:        wasmBytes,
 		RecoveryURL:      recoveryURL,
 		NoEmbedManifest:  noEmbedManifest,
 	}

@@ -8,7 +8,7 @@ import (
 
 // GenerateMakerHTML creates the complete maker.html with all assets embedded.
 // createWASMBytes is the create.wasm binary (runs in browser for bundle creation).
-// Note: create.wasm self-contains recover.wasm embedded within it (via html.GetRecoverWASMBytes()).
+// Note: recover.html uses native JavaScript crypto, not WASM.
 // version is the rememory version string.
 // githubURL is the URL to download CLI binaries.
 func GenerateMakerHTML(createWASMBytes []byte, version, githubURL string) string {
@@ -31,7 +31,6 @@ func GenerateMakerHTML(createWASMBytes []byte, version, githubURL string) string
 	html = strings.Replace(html, "{{CREATE_APP_JS}}", sharedJS+"\n"+createAppJS, 1)
 
 	// Embed create.wasm as gzip-compressed base64 (this runs in the browser)
-	// Note: create.wasm contains recover.wasm embedded within it for generating bundles
 	createWASMB64 := compressAndEncode(createWASMBytes)
 	html = strings.Replace(html, "{{WASM_BASE64}}", createWASMB64, 1)
 

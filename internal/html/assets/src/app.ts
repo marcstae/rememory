@@ -1,16 +1,35 @@
-// ReMemory Recovery Tool - Browser-based recovery using Go WASM
+// ReMemory Recovery Tool - Browser-based recovery using native JavaScript crypto
 
 import type {
   RecoveryState,
   PersonalizationData,
   FriendInfo,
-  ShareInput,
   ToastAction,
   TranslationFunction
 } from './types';
 
+// Native crypto imports
+import {
+  parseShare,
+  parseCompactShare,
+  encodeCompact,
+  combine,
+  recoverPassphrase,
+  base64ToBytes,
+  bytesToBase64,
+  decrypt,
+  extractTarGz,
+  extractBundle,
+  extractPersonalizationFromHTML,
+  decodeShareWords,
+  type ParsedShare,
+} from './crypto';
+
 // Translation function (defined in HTML)
 declare const t: TranslationFunction;
+
+// Extended share type with UI-specific fields
+type UIShare = ParsedShare & { isHolder?: boolean };
 
 (function() {
   'use strict';
@@ -33,14 +52,12 @@ declare const t: TranslationFunction;
     manifest: null,
     threshold: 0,
     total: 0,
-    wasmReady: false,
     recovering: false,
     recoveryComplete: false
   };
 
   // DOM elements interface
   interface Elements {
-    wasmLoadingIndicator: HTMLElement | null;
     shareDropZone: HTMLElement | null;
     shareFileInput: HTMLInputElement | null;
     sharesList: HTMLElement | null;
@@ -71,7 +88,6 @@ declare const t: TranslationFunction;
 
   // DOM elements
   const elements: Elements = {
-    wasmLoadingIndicator: document.getElementById('wasm-loading-indicator'),
     shareDropZone: document.getElementById('share-drop-zone'),
     shareFileInput: document.getElementById('share-file-input') as HTMLInputElement | null,
     sharesList: document.getElementById('shares-list'),
@@ -132,19 +148,6 @@ declare const t: TranslationFunction;
   }
 
   const errorHandlers = {
-    wasmLoadFailed(_err: unknown): void {
-      elements.wasmLoadingIndicator?.classList.add('hidden');
-      toast.error(
-        t('error_wasm_title'),
-        t('error_wasm_message'),
-        t('error_wasm_guidance'),
-        [
-          { id: 'reload', label: t('action_reload'), primary: true, onClick: () => window.location.reload() },
-          { id: 'cli', label: t('action_use_cli'), onClick: () => window.open('https://github.com/eljojo/rememory', '_blank') }
-        ]
-      );
-    },
-
     invalidShare(filename: string, _detail?: string): void {
       if (elements.shareDropZone) {
         showError(
@@ -236,42 +239,44 @@ declare const t: TranslationFunction;
     setupPaste();
     setupScanner();
 
-    // Render contact list immediately (doesn't need WASM)
+    // Render contact list immediately
     if (personalization?.otherFriends && personalization.otherFriends.length > 0) {
       renderContactList();
       elements.contactListSection?.classList.remove('hidden');
     }
 
-    await loadWasm();
+    // Native crypto is always ready
+    window.rememoryAppReady = true;
 
-    // Load personalization data after WASM is ready
+    // Load personalization data
     if (personalization) {
-      loadPersonalizationData();
+      await loadPersonalizationData();
     }
 
     // Check URL fragment for compact share (e.g. #share=RM1:2:5:3:BASE64:CHECK)
-    loadShareFromFragment();
+    await loadShareFromFragment();
   }
 
   // ============================================
   // Personalization
   // ============================================
 
-  function loadPersonalizationData(): void {
+  async function loadPersonalizationData(): Promise<void> {
     if (!personalization) return;
 
     // Load the holder's share automatically
     if (personalization.holderShare) {
-      const result = window.rememoryParseShare(personalization.holderShare);
-      if (!result.error && result.share) {
-        const share = result.share;
+      try {
+        const share = await parseShare(personalization.holderShare) as UIShare;
         share.isHolder = true;
+        share.compact = await encodeCompact(share);
         state.threshold = share.threshold;
         state.total = share.total;
         state.shares.push(share);
-
         updateSharesUI();
         updateContactList();
+      } catch {
+        // Silently ignore invalid holder share
       }
     }
 
@@ -293,34 +298,33 @@ declare const t: TranslationFunction;
   // URL Fragment Share Loading
   // ============================================
 
-  function loadShareFromFragment(): void {
-    if (!state.wasmReady) return;
-
+  async function loadShareFromFragment(): Promise<void> {
     const hash = window.location.hash;
     if (!hash || !hash.startsWith('#share=')) return;
 
     const compact = decodeURIComponent(hash.slice('#share='.length));
     if (!compactShareRegex.test(compact)) return;
 
-    const result = window.rememoryParseCompactShare(compact);
-    if (result.error || !result.share) return;
+    try {
+      const share = await parseCompactShare(compact);
 
-    const share = result.share;
+      if (state.shares.some(s => s.index === share.index)) return;
 
-    if (state.shares.some(s => s.index === share.index)) return;
+      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+        state.threshold = share.threshold;
+        state.total = share.total;
+      }
 
-    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-      state.threshold = share.threshold;
-      state.total = share.total;
-    }
+      state.shares.push(share);
+      updateSharesUI();
+      checkRecoverReady();
 
-    state.shares.push(share);
-    updateSharesUI();
-    checkRecoverReady();
-
-    // Clear the fragment from the URL bar to avoid re-importing on reload
-    if (window.history?.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      // Clear the fragment from the URL bar to avoid re-importing on reload
+      if (window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    } catch {
+      // Silently ignore invalid fragment shares
     }
   }
 
@@ -370,78 +374,6 @@ declare const t: TranslationFunction;
         checkbox.textContent = isCollected ? '✓' : '';
       }
     });
-  }
-
-  // ============================================
-  // WASM Loading
-  // ============================================
-
-  async function loadWasm(): Promise<void> {
-    try {
-      const go = new window.Go();
-      const result = await WebAssembly.instantiateStreaming(
-        fetch('recover.wasm'),
-        go.importObject
-      );
-      go.run(result.instance);
-
-      await waitForWasm();
-      state.wasmReady = true;
-      window.rememoryAppReady = true;
-      elements.wasmLoadingIndicator?.classList.add('hidden');
-    } catch (err) {
-      // Try loading from embedded gzip-compressed base64 as fallback
-      if (typeof window.WASM_BINARY !== 'undefined') {
-        try {
-          const go = new window.Go();
-          const bytes = await decodeAndDecompressWasm(window.WASM_BINARY);
-          const result = await WebAssembly.instantiate(bytes, go.importObject);
-          go.run(result.instance);
-          await waitForWasm();
-          state.wasmReady = true;
-          window.rememoryAppReady = true;
-          elements.wasmLoadingIndicator?.classList.add('hidden');
-          return;
-        } catch (e) {
-          errorHandlers.wasmLoadFailed(e);
-          return;
-        }
-      }
-      errorHandlers.wasmLoadFailed(err);
-    }
-  }
-
-  const { waitForWasm } = window.rememoryUtils;
-
-  async function decodeAndDecompressWasm(base64: string): Promise<ArrayBuffer> {
-    const compressed = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-
-    if (typeof DecompressionStream !== 'undefined') {
-      const ds = new DecompressionStream('gzip');
-      const writer = ds.writable.getWriter();
-      writer.write(compressed);
-      writer.close();
-      const reader = ds.readable.getReader();
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) chunks.push(value);
-      }
-      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-      const bytes = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.length;
-      }
-      return bytes.buffer;
-    } else if (typeof (window as unknown as { pako?: { inflate: (data: Uint8Array) => Uint8Array } }).pako !== 'undefined') {
-      const pako = (window as unknown as { pako: { inflate: (data: Uint8Array) => Uint8Array } }).pako;
-      return pako.inflate(compressed).buffer as ArrayBuffer;
-    } else {
-      throw new Error('Browser does not support DecompressionStream');
-    }
   }
 
   // ============================================
@@ -520,23 +452,19 @@ declare const t: TranslationFunction;
   }
 
   async function parseAndAddShareFromPaste(content: string): Promise<void> {
-    if (!state.wasmReady) {
-      toast.warning(t('error_not_ready_title'), t('error_not_ready_message'), t('error_not_ready_guidance'));
-      return;
-    }
-
     if (elements.shareDropZone) {
       clearInlineError(elements.shareDropZone);
     }
 
-    // Try compact format first, then PEM format
-    let share: import('./types').ParsedShare | undefined;
+    let share: UIShare | undefined;
 
+    // Try compact format first
     if (compactShareRegex.test(content.trim())) {
-      const result = window.rememoryParseCompactShare(content.trim());
-      if (result.error || !result.share) {
+      try {
+        share = await parseCompactShare(content.trim());
+      } catch (err) {
         showError(
-          result.error || t('error_invalid_share_message', t('pasted_content')),
+          err instanceof Error ? err.message : t('error_invalid_share_message', t('pasted_content')),
           {
             title: t('error_invalid_share_title'),
             guidance: t('error_invalid_share_guidance')
@@ -544,10 +472,12 @@ declare const t: TranslationFunction;
         );
         return;
       }
-      share = result.share;
     } else if (shareRegex.test(content)) {
-      const result = window.rememoryParseShare(content);
-      if (result.error || !result.share) {
+      // Try PEM format
+      try {
+        share = await parseShare(content);
+        share.compact = await encodeCompact(share);
+      } catch {
         showError(
           t('error_invalid_share_message', t('pasted_content')),
           {
@@ -557,21 +487,18 @@ declare const t: TranslationFunction;
         );
         return;
       }
-      share = result.share;
     } else {
       // Try to extract BIP39 words from the pasted text
       const extractedWords = extractWordsFromText(content);
       if (extractedWords.length >= 25) {
-        const wordResult = window.rememoryDecodeWords(extractedWords);
-        if (!wordResult.error && wordResult.index > 0) {
-          // Valid words found — add share directly (25th word provides the index)
+        try {
+          const wordResult = await decodeShareWords(extractedWords);
           share = buildShareFromWords(wordResult);
-          if (!share) return; // error already shown
-        } else if (wordResult.error) {
+        } catch (err) {
           // Words were detected but decoding failed — show the specific error
           toast.error(
             t('error_invalid_words_title'),
-            wordResult.error,
+            err instanceof Error ? err.message : String(err),
             t('error_invalid_words_guidance')
           );
           return;
@@ -590,8 +517,8 @@ declare const t: TranslationFunction;
       }
     }
 
-    if (state.shares.some(s => s.index === share.index)) {
-      errorHandlers.duplicateShare(share.index);
+    if (state.shares.some(s => s.index === share!.index)) {
+      errorHandlers.duplicateShare(share!.index);
       return;
     }
 
@@ -609,9 +536,7 @@ declare const t: TranslationFunction;
   // Build Share from Decoded Words
   // ============================================
 
-  function buildShareFromWords(wordResult: { data: Uint8Array; index: number; checksum: string }): import('./types').ParsedShare | null {
-    const shareIndex = wordResult.index;
-
+  function buildShareFromWords(wordResult: { data: Uint8Array; index: number }): UIShare {
     // Get version/total/threshold from first loaded share or personalization
     let version = 2;
     let total = 0;
@@ -626,14 +551,13 @@ declare const t: TranslationFunction;
       threshold = personalization.threshold;
     }
 
-    // Construct ParsedShare from decoded data
-    const dataB64 = btoa(String.fromCharCode(...wordResult.data));
     return {
       version,
-      index: shareIndex,
+      index: wordResult.index,
       threshold,
       total,
-      dataB64
+      data: wordResult.data,
+      dataB64: bytesToBase64(wordResult.data),
     };
   }
 
@@ -650,10 +574,6 @@ declare const t: TranslationFunction;
 
     elements.scanQrBtn?.classList.remove('hidden');
     elements.scanQrBtn?.addEventListener('click', () => {
-      if (!state.wasmReady) {
-        toast.warning(t('error_not_ready_title'), t('error_not_ready_message'), t('error_not_ready_guidance'));
-        return;
-      }
       openScanner();
     });
 
@@ -765,6 +685,8 @@ declare const t: TranslationFunction;
       try {
         if (file.name.endsWith('.zip') || file.type === 'application/zip') {
           await handleBundleZip(file);
+        } else if (file.name.endsWith('.html') || file.name.endsWith('.htm')) {
+          await handleShareFromHTML(file);
         } else {
           const content = await readFileAsText(file);
           await parseAndAddShare(content, file.name);
@@ -775,86 +697,136 @@ declare const t: TranslationFunction;
     }
   }
 
-  async function handleBundleZip(file: File): Promise<void> {
-    if (!state.wasmReady) {
-      toast.warning(t('error_not_ready_title'), t('error_not_ready_message'), t('error_not_ready_guidance'));
+  async function handleShareFromHTML(file: File): Promise<void> {
+    const text = await readFileAsText(file);
+
+    const personalizationData = extractPersonalizationFromHTML(text);
+    if (!personalizationData || !personalizationData.holderShare) {
+      showError(
+        t('error_no_share_message', file.name),
+        {
+          title: t('error_no_share_title'),
+          guidance: t('error_html_no_share_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
       return;
     }
 
+    try {
+      // Parse and add the share
+      const share = await parseShare(personalizationData.holderShare);
+      share.compact = await encodeCompact(share);
+
+      if (state.shares.some(s => s.index === share.index)) {
+        errorHandlers.duplicateShare(share.index);
+        return;
+      }
+
+      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+        state.threshold = share.threshold;
+        state.total = share.total;
+      }
+
+      state.shares.push(share);
+      updateSharesUI();
+
+      // Also extract manifest if present and we don't already have one
+      if (personalizationData.manifestB64 && !state.manifest) {
+        const binary = atob(personalizationData.manifestB64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        state.manifest = bytes;
+        showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
+      }
+
+      checkRecoverReady();
+    } catch (err) {
+      showError(
+        t('error_no_share_message', file.name),
+        {
+          title: t('error_no_share_title'),
+          guidance: err instanceof Error ? err.message : t('error_html_no_share_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
+    }
+  }
+
+  async function handleBundleZip(file: File): Promise<void> {
     const buffer = await readFileAsArrayBuffer(file);
     const zipData = new Uint8Array(buffer);
 
-    const result = window.rememoryExtractBundle(zipData);
-    if (result.error || !result.share) {
-      if (elements.shareDropZone) {
-        showError(
-          t('error_bundle_extract_message', file.name),
-          {
-            title: t('error_bundle_extract_title'),
-            guidance: t('error_bundle_extract_guidance'),
-            inline: true,
-            targetElement: elements.shareDropZone
-          }
-        );
+    try {
+      const bundle = extractBundle(zipData);
+      if (!bundle.share) {
+        throw new Error('No share found in bundle');
       }
-      return;
+      const share = await parseShare(bundle.share);
+      share.compact = await encodeCompact(share);
+
+      if (state.shares.some(s => s.index === share.index)) {
+        errorHandlers.duplicateShare(share.index);
+        return;
+      }
+
+      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+        state.threshold = share.threshold;
+        state.total = share.total;
+      }
+
+      state.shares.push(share);
+      updateSharesUI();
+
+      if (bundle.manifest && !state.manifest) {
+        state.manifest = bundle.manifest;
+        showManifestLoaded('MANIFEST.age', state.manifest.length, 'bundle');
+      }
+
+      checkRecoverReady();
+    } catch (err) {
+      showError(
+        t('error_bundle_extract_message', file.name),
+        {
+          title: t('error_bundle_extract_title'),
+          guidance: err instanceof Error ? err.message : t('error_bundle_extract_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
     }
-
-    const share = result.share;
-
-    if (state.shares.some(s => s.index === share.index)) {
-      errorHandlers.duplicateShare(share.index);
-      return;
-    }
-
-    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-      state.threshold = share.threshold;
-      state.total = share.total;
-    }
-
-    state.shares.push(share);
-    updateSharesUI();
-
-    if (result.manifest && !state.manifest) {
-      state.manifest = result.manifest;
-      showManifestLoaded('MANIFEST.age', state.manifest.length, 'bundle');
-    }
-
-    checkRecoverReady();
   }
 
   async function parseAndAddShare(content: string, filename: string): Promise<void> {
-    if (!state.wasmReady) {
-      toast.warning(t('error_not_ready_title'), t('error_not_ready_message'), t('error_not_ready_guidance'));
-      return;
-    }
-
     if (!shareRegex.test(content)) {
       errorHandlers.noShareFound(filename);
       return;
     }
 
-    const result = window.rememoryParseShare(content);
-    if (result.error || !result.share) {
-      errorHandlers.invalidShare(filename, result.error);
-      return;
+    try {
+      const share = await parseShare(content);
+      share.compact = await encodeCompact(share);
+
+      if (state.shares.some(s => s.index === share.index)) {
+        errorHandlers.duplicateShare(share.index);
+        return;
+      }
+
+      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+        state.threshold = share.threshold;
+        state.total = share.total;
+      }
+
+      state.shares.push(share);
+      updateSharesUI();
+      checkRecoverReady();
+    } catch (err) {
+      errorHandlers.invalidShare(filename, err instanceof Error ? err.message : undefined);
     }
-
-    const share = result.share;
-
-    if (state.shares.some(s => s.index === share.index)) {
-      errorHandlers.duplicateShare(share.index);
-      return;
-    }
-
-    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-      state.threshold = share.threshold;
-      state.total = share.total;
-    }
-
-    state.shares.push(share);
-    updateSharesUI();
-    checkRecoverReady();
   }
 
   // ============================================
@@ -863,12 +835,12 @@ declare const t: TranslationFunction;
 
   // Resolve a display name for a share: use holder if set, otherwise look up
   // the friend name from personalization data by share index, fall back to generic.
-  function resolveShareName(share: import('./types').ParsedShare): string {
+  function resolveShareName(share: UIShare): string {
     if (share.holder) return share.holder;
     if (personalization) {
       if (personalization.holder) {
         // Check if this matches the bundle holder's own share index
-        const holderShare = state.shares.find(s => s.isHolder);
+        const holderShare = state.shares.find(s => (s as UIShare).isHolder);
         if (holderShare && holderShare.index === share.index) {
           return personalization.holder;
         }
@@ -890,9 +862,9 @@ declare const t: TranslationFunction;
       const item = document.createElement('div');
       item.className = 'share-item valid';
 
-      const displayName = resolveShareName(share);
+      const displayName = resolveShareName(share as UIShare);
 
-      const isHolderShare = share.isHolder ||
+      const isHolderShare = (share as UIShare).isHolder ||
         (personalization && share.holder &&
          share.holder.toLowerCase() === personalization.holder.toLowerCase());
 
@@ -998,40 +970,21 @@ declare const t: TranslationFunction;
   async function handleManifestFromHTML(file: File): Promise<void> {
     const text = await readFileAsText(file);
 
-    // Extract PERSONALIZATION JSON from the HTML
-    const match = text.match(/window\.PERSONALIZATION\s*=\s*(\{[^\n]*\})\s*;/);
-    if (!match || !match[1]) {
-      if (elements.manifestDropZone) {
-        showError(
-          t('error_wrong_manifest_message', file.name),
-          {
-            title: t('error_wrong_manifest_title'),
-            guidance: t('error_html_no_manifest_guidance'),
-            inline: true,
-            targetElement: elements.manifestDropZone
-          }
-        );
-      }
+    const personalizationData = extractPersonalizationFromHTML(text);
+    if (!personalizationData || !personalizationData.manifestB64) {
+      showError(
+        t('error_wrong_manifest_message', file.name),
+        {
+          title: t('error_wrong_manifest_title'),
+          guidance: t('error_html_no_manifest_guidance'),
+          inline: true,
+          targetElement: elements.manifestDropZone || undefined
+        }
+      );
       return;
     }
 
     try {
-      const personalizationData = JSON.parse(match[1]);
-      if (!personalizationData.manifestB64) {
-        if (elements.manifestDropZone) {
-          showError(
-            t('error_wrong_manifest_message', file.name),
-            {
-              title: t('error_wrong_manifest_title'),
-              guidance: t('error_html_no_manifest_guidance'),
-              inline: true,
-              targetElement: elements.manifestDropZone
-            }
-          );
-        }
-        return;
-      }
-
       const binary = atob(personalizationData.manifestB64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
@@ -1041,10 +994,10 @@ declare const t: TranslationFunction;
       showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
 
       // Also extract the share if present and we don't already have one
-      if (personalizationData.holderShare && state.wasmReady) {
-        const result = window.rememoryParseShare(personalizationData.holderShare);
-        if (!result.error && result.share) {
-          const share = result.share;
+      if (personalizationData.holderShare) {
+        try {
+          const share = await parseShare(personalizationData.holderShare);
+          share.compact = await encodeCompact(share);
           if (!state.shares.some(s => s.index === share.index)) {
             if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
               state.threshold = share.threshold;
@@ -1053,22 +1006,22 @@ declare const t: TranslationFunction;
             state.shares.push(share);
             updateSharesUI();
           }
+        } catch {
+          // Ignore invalid share in HTML
         }
       }
 
       checkRecoverReady();
     } catch {
-      if (elements.manifestDropZone) {
-        showError(
-          t('error_wrong_manifest_message', file.name),
-          {
-            title: t('error_wrong_manifest_title'),
-            guidance: t('error_html_no_manifest_guidance'),
-            inline: true,
-            targetElement: elements.manifestDropZone
-          }
-        );
-      }
+      showError(
+        t('error_wrong_manifest_message', file.name),
+        {
+          title: t('error_wrong_manifest_title'),
+          guidance: t('error_html_no_manifest_guidance'),
+          inline: true,
+          targetElement: elements.manifestDropZone || undefined
+        }
+      );
     }
   }
 
@@ -1156,40 +1109,25 @@ declare const t: TranslationFunction;
       setProgress(10);
       setStatus(t('combining'));
 
-      const sharesForCombine: ShareInput[] = state.shares.map(s => ({
-        version: s.version,
-        index: s.index,
-        threshold: s.threshold,
-        dataB64: s.dataB64
-      }));
+      // Convert shares to raw bytes and combine
+      const shareBytes = state.shares.map(s => base64ToBytes(s.dataB64));
+      const recovered = await combine(shareBytes);
+      const version = state.shares[0].version;
+      const passphrase = recoverPassphrase(recovered, version);
 
-      const combineResult = window.rememoryCombineShares(sharesForCombine);
-      if (combineResult.error || !combineResult.passphrase) {
-        throw new Error(combineResult.error || 'Failed to combine shares');
-      }
-
-      const passphrase = combineResult.passphrase;
       setProgress(30);
 
       setStatus(t('decrypting'));
-      const decryptResult = window.rememoryDecryptManifest(state.manifest!, passphrase);
-      if (decryptResult.error || !decryptResult.data) {
-        throw new Error(decryptResult.error || 'Failed to decrypt');
-      }
+      const decrypted = await decrypt(state.manifest!, passphrase);
 
       setProgress(60);
 
-      state.decryptedArchive = decryptResult.data;
+      state.decryptedArchive = decrypted;
 
       setStatus(t('reading'));
-      const extractResult = window.rememoryExtractTarGz(decryptResult.data);
-      if (extractResult.error || !extractResult.files) {
-        throw new Error(extractResult.error || 'Failed to extract');
-      }
+      const files = await extractTarGz(decrypted);
 
       setProgress(90);
-
-      const files = extractResult.files;
 
       files.forEach(file => {
         const item = document.createElement('div');
@@ -1326,10 +1264,7 @@ declare const t: TranslationFunction;
     });
   }
 
-  // ============================================
-  // Global Exports
-  // ============================================
-
+  // Global export for HTML templates
   window.rememoryUpdateUI = function(): void {
     updateSharesUI();
     updateContactList();

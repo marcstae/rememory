@@ -413,14 +413,10 @@ func TestBundleGeneration(t *testing.T) {
 		t.Fatalf("saving project: %v", err)
 	}
 
-	// Generate bundles
-	// Use minimal WASM bytes for testing (just needs to be non-empty)
-	fakeWASM := []byte("fake-wasm-for-testing")
-
+	// Generate bundles (recover.html uses native JavaScript crypto, no WASM)
 	cfg := bundle.Config{
 		Version:          "v1.0.0-test",
 		GitHubReleaseURL: "https://github.com/eljojo/rememory/releases/tag/v1.0.0-test",
-		WASMBytes:        fakeWASM,
 	}
 
 	if err := bundle.GenerateAll(p, cfg); err != nil {
@@ -493,7 +489,7 @@ func verifyBundle(t *testing.T, bundlePath string, friend project.Friend, allFri
 		t.Error("missing README .pdf file")
 	}
 	// MANIFEST.age is only in the ZIP when NOT embedded in recover.html.
-	// With a tiny fake WASM, manifests are small enough to embed, so it won't be in the ZIP.
+	// Small manifests are embedded, so they won't be in the ZIP.
 	// We still parse it if present, but don't require it.
 	if !foundRecover {
 		t.Error("missing file: recover.html")
@@ -557,9 +553,7 @@ func verifyBundle(t *testing.T, bundlePath string, friend project.Friend, allFri
 	if !strings.Contains(recoverContent, "v1.0.0-test") {
 		t.Error("recover.html missing version")
 	}
-	if !strings.Contains(recoverContent, "WASM_BINARY") {
-		t.Error("recover.html missing embedded WASM")
-	}
+	// Note: recover.html now uses native JavaScript crypto, no WASM needed
 }
 
 // TestBundleRecovery tests recovering from bundle contents
@@ -626,11 +620,9 @@ func TestBundleRecovery(t *testing.T) {
 	p.Save()
 
 	// Generate bundles
-	fakeWASM := []byte("fake-wasm")
 	cfg := bundle.Config{
 		Version:          "v1.0.0",
 		GitHubReleaseURL: "https://example.com",
-		WASMBytes:        fakeWASM,
 	}
 	bundle.GenerateAll(p, cfg)
 
@@ -806,11 +798,9 @@ func TestAnonymousBundleGeneration(t *testing.T) {
 	p.Save()
 
 	// Generate bundles
-	fakeWASM := []byte("fake-wasm")
 	cfg := bundle.Config{
 		Version:          "v1.0.0-test",
 		GitHubReleaseURL: "https://example.com",
-		WASMBytes:        fakeWASM,
 	}
 	if err := bundle.GenerateAll(p, cfg); err != nil {
 		t.Fatalf("generating bundles: %v", err)
@@ -951,11 +941,9 @@ func TestAnonymousBundleRecovery(t *testing.T) {
 	p.Save()
 
 	// Generate bundles
-	fakeWASM := []byte("fake-wasm")
 	cfg := bundle.Config{
 		Version:          "v1.0.0",
 		GitHubReleaseURL: "https://example.com",
-		WASMBytes:        fakeWASM,
 	}
 	bundle.GenerateAll(p, cfg)
 
@@ -1059,11 +1047,9 @@ func TestManifestEmbedding(t *testing.T) {
 		}
 		p.Save()
 
-		fakeWASM := []byte("fake-wasm")
 		cfg := bundle.Config{
 			Version:          "v1.0.0",
 			GitHubReleaseURL: "https://example.com",
-			WASMBytes:        fakeWASM,
 			NoEmbedManifest:  noEmbed,
 		}
 		if err := bundle.GenerateAll(p, cfg); err != nil {
@@ -1144,8 +1130,8 @@ func TestManifestEmbedding(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping large manifest test in short mode")
 		}
-		// 6MB secret -> encrypted manifest will exceed 5MB threshold
-		bundlesDir, _ := setup(t, 6*1024*1024, false)
+		// 11MB secret -> encrypted manifest will exceed 10MB threshold
+		bundlesDir, _ := setup(t, 11*1024*1024, false)
 		bundlePath := filepath.Join(bundlesDir, "bundle-alice.zip")
 
 		pd := extractPersonalization(t, bundlePath)

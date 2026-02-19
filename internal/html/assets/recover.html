@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; connect-src blob:; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}'; style-src 'unsafe-inline'; img-src blob: data:; connect-src blob:; form-action 'none';">
   <title>ReMemory Recovery Tool</title>
   <style>{{STYLES}}</style>
 </head>
@@ -106,11 +106,6 @@
           <span>&#128275;</span> <span data-i18n="decrypt_btn">Unlock & Recover</span>
         </button>
 
-        <p id="wasm-loading-indicator" class="wasm-loading-hint">
-          <span class="spinner-small"></span>
-          <span data-i18n="loading">Loading...</span>
-        </p>
-
         <div id="progress-bar" class="progress-bar hidden">
           <div class="fill" style="width: 0%"></div>
         </div>
@@ -208,21 +203,13 @@
     });
   </script>
 
-  <!-- Go WASM runtime -->
-  <script nonce="{{CSP_NONCE}}">{{WASM_EXEC}}</script>
-
-  <!-- Embedded WASM binary (base64) -->
-  <script nonce="{{CSP_NONCE}}">
-    window.WASM_BINARY = "{{WASM_BASE64}}";
-  </script>
-
   <!-- Personalization data (embedded for this specific friend) -->
   <script nonce="{{CSP_NONCE}}">
     window.PERSONALIZATION = {{PERSONALIZATION_DATA}};
+    window.README_NAMES = {{README_NAMES}};
   </script>
 
-  <!-- Application logic (must come after WASM_BINARY and PERSONALIZATION) -->
-  <!-- App.js handles WASM loading with gzip decompression -->
+  <!-- Application logic (native JavaScript crypto, no WASM) -->
   <script nonce="{{CSP_NONCE}}">{{APP_JS}}</script>
 </body>
 </html>

@@ -1,47 +1,9 @@
 // ReMemory Type Definitions
-// Types for the WASM interface and shared data structures
+// Shared types for recovery (native JS) and creation (WASM)
 
 // ============================================
-// Share Types
+// Bundle Types (used by maker.html WASM)
 // ============================================
-
-export interface ParsedShare {
-  version: number;
-  index: number;
-  threshold: number;
-  total: number;
-  holder?: string;
-  dataB64: string;
-  compact?: string;   // Compact-encoded string (e.g. RM1:2:5:3:BASE64:CHECK)
-  isHolder?: boolean;  // True if this is the current user's share
-}
-
-export interface ShareInput {
-  version: number;
-  index: number;
-  threshold: number;
-  dataB64: string;
-}
-
-export interface ShareParseResult {
-  error?: string;
-  share?: ParsedShare;
-}
-
-export interface CombineResult {
-  error?: string;
-  passphrase?: string;
-}
-
-// ============================================
-// Bundle Types
-// ============================================
-
-export interface BundleExtractResult {
-  error?: string;
-  share?: ParsedShare;
-  manifest?: Uint8Array;
-}
 
 export interface BundleFile {
   name: string;
@@ -66,25 +28,6 @@ export interface GeneratedBundle {
 export interface BundleCreateResult {
   error?: string;
   bundles?: GeneratedBundle[];
-}
-
-// ============================================
-// Decryption Types
-// ============================================
-
-export interface DecryptResult {
-  error?: string;
-  data?: Uint8Array;
-}
-
-export interface ExtractedFile {
-  name: string;
-  data: Uint8Array;
-}
-
-export interface ExtractResult {
-  error?: string;
-  files?: ExtractedFile[];
 }
 
 // ============================================
@@ -132,12 +75,14 @@ export interface PersonalizationData {
 // UI State Types
 // ============================================
 
+// Import ParsedShare from crypto module for recovery state
+import type { ParsedShare } from './crypto/share';
+
 export interface RecoveryState {
-  shares: ParsedShare[];
+  shares: (ParsedShare & { isHolder?: boolean })[];
   manifest: Uint8Array | null;
   threshold: number;
   total: number;
-  wasmReady: boolean;
   recovering: boolean;
   recoveryComplete: boolean;
   decryptedArchive?: Uint8Array;
@@ -177,25 +122,16 @@ export interface ToastOptions {
 }
 
 // ============================================
-// WASM Global Interface
+// WASM Global Interface (for maker.html)
 // ============================================
 
 declare global {
   interface Window {
-    // WASM ready flag
+    // WASM ready flag (used by maker.html)
     rememoryReady: boolean;
     rememoryAppReady?: boolean;
 
-    // Recovery functions (recover.wasm)
-    rememoryParseShare(content: string): ShareParseResult;
-    rememoryCombineShares(shares: ShareInput[]): CombineResult;
-    rememoryDecryptManifest(manifest: Uint8Array, passphrase: string): DecryptResult;
-    rememoryExtractTarGz(data: Uint8Array): ExtractResult;
-    rememoryExtractBundle(zipData: Uint8Array): BundleExtractResult;
-    rememoryParseCompactShare(compact: string): ShareParseResult;
-    rememoryDecodeWords(words: string[]): { data: Uint8Array; index: number; checksum: string; error?: string };
-
-    // Creation functions (create.wasm)
+    // Creation functions (create.wasm, used by maker.html)
     rememoryCreateBundles(config: BundleConfig): BundleCreateResult;
     rememoryParseProjectYAML(yaml: string): ProjectParseResult;
 
@@ -206,7 +142,6 @@ declare global {
       toast: ToastManager;
       showInlineError: (target: HTMLElement, message: string, guidance?: string) => void;
       clearInlineError: (target: HTMLElement) => void;
-      waitForWasm: (timeoutMs?: number) => Promise<void>;
     };
 
     // UI update callback
@@ -220,7 +155,10 @@ declare global {
     VERSION?: string;
     GITHUB_URL?: string;
 
-    // Go WASM runtime
+    // Localized README filenames (embedded in recover.html)
+    README_NAMES?: string[];
+
+    // Go WASM runtime (used by maker.html)
     Go: new () => GoInstance;
   }
 

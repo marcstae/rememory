@@ -193,10 +193,6 @@ func createBundles(config CreateBundlesConfig) ([]BundleOutput, error) {
 	// Current timestamp for all bundles
 	now := time.Now().UTC()
 
-	// Get recovery WASM bytes for embedding in recover.html
-	// Note: In WASM context, we use the embedded recover.wasm (smaller, recovery-only)
-	wasmBytes := html.GetRecoverWASMBytes()
-
 	// Create shares and bundles
 	bundles := make([]BundleOutput, n)
 	shares := make([]*core.Share, n)
@@ -273,7 +269,7 @@ func createBundles(config CreateBundlesConfig) ([]BundleOutput, error) {
 			personalization.ManifestB64 = base64.StdEncoding.EncodeToString(manifestData)
 		}
 
-		recoverHTML := html.GenerateRecoverHTML(wasmBytes, config.Version, config.GitHubURL, personalization)
+		recoverHTML := html.GenerateRecoverHTML(config.Version, config.GitHubURL, personalization)
 		recoverChecksum := core.HashString(recoverHTML)
 
 		// Generate README.txt

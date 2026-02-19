@@ -267,13 +267,13 @@ Each bundle contains:
 | `README.txt` | Instructions + their unique share + contact list for other holders |
 | `README.pdf` | Same content, formatted for printing |
 | `MANIFEST.age` | Your encrypted secrets (same in all bundles) |
-| `recover.html` | **Personalized** browser-based recovery tool (~1.8 MB, self-contained) |
+| `recover.html` | **Personalized** browser-based recovery tool (~300 KB, self-contained) |
 
 **What makes each bundle unique:**
 - The `recover.html` is personalized for each friend:
   - Their share is pre-loaded automatically
   - Shows a contact list with other friends' info
-  - If the encrypted manifest is 5 MB or less, it's also embedded in `recover.html`—so friends only need to collect shares from others to complete recovery
+  - If the encrypted manifest is 10 MB or less, it's also embedded in `recover.html`—so friends only need to collect shares from others to complete recovery
   - For larger manifests, they'll also need to load the separate `MANIFEST.age` file
 
 The README.txt includes:
@@ -344,7 +344,7 @@ When your friends need to recover your secrets:
    - They'll see a **contact list** showing other friends who hold shares
 
 2. **Load the encrypted manifest**
-   - For small manifests (≤ 5 MB), this step is automatic—the manifest is embedded in `recover.html`
+   - For small manifests (≤ 10 MB), this step is automatic—the manifest is embedded in `recover.html`
    - Otherwise, drag and drop `MANIFEST.age` from the bundle onto the manifest area, or click to browse
 
 3. **Coordinate with other friends**

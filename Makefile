@@ -9,20 +9,18 @@ build: wasm
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/rememory
 
 # Compile TypeScript to JavaScript (bundled as IIFE for inline use)
+# Uses --loader:.txt=text to bundle BIP39 wordlists as strings
 ts:
 	@echo "Compiling TypeScript..."
 	esbuild internal/html/assets/src/shared.ts --bundle --format=iife --global-name=_shared --outfile=internal/html/assets/shared.js --target=es2020
-	esbuild internal/html/assets/src/app.ts --bundle --format=iife --outfile=internal/html/assets/app.js --target=es2020
+	esbuild internal/html/assets/src/app.ts --bundle --format=iife --outfile=internal/html/assets/app.js --target=es2020 --loader:.txt=text
 	esbuild internal/html/assets/src/create-app.ts --bundle --format=iife --outfile=internal/html/assets/create-app.js --target=es2020
 
-# Build WASM modules
-# - recover.wasm: Small, recovery-only (for bundles)
-# - create.wasm: Full, includes bundle creation logic (for maker.html)
+# Build WASM module for maker.html (bundle creation tool)
+# Note: recover.html uses native JavaScript crypto, no WASM needed
 wasm: ts
 	@mkdir -p internal/html/assets
-	@echo "Building recover.wasm (recovery only)..."
-	GOOS=js GOARCH=wasm go build -o internal/html/assets/recover.wasm ./internal/wasm
-	@echo "Building create.wasm (full bundle creation)..."
+	@echo "Building create.wasm (bundle creation for maker.html)..."
 	GOOS=js GOARCH=wasm go build -tags create -o internal/html/assets/create.wasm ./internal/wasm
 	@if [ ! -f internal/html/assets/wasm_exec.js ]; then \
 		cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" internal/html/assets/ 2>/dev/null || \
@@ -57,6 +55,7 @@ full: clean build test test-e2e
 lint:
 	go vet ./...
 	test -z "$$(gofmt -w .)"
+	npx tsc --noEmit --project internal/html/assets/tsconfig.json
 
 clean:
 	rm -f $(BINARY) coverage.out coverage.html

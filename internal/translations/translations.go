@@ -211,6 +211,21 @@ func IsReadmeFile(filename, ext string) bool {
 	return false
 }
 
+// ReadmeBasenames returns the unique list of README base filenames (without extension)
+// across all languages. e.g. ["README", "LEEME", "LIESMICH", ...]
+func ReadmeBasenames() []string {
+	seen := make(map[string]bool)
+	var names []string
+	for _, lang := range Languages {
+		name := GetString("readme", lang, "readme_filename")
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 func fsForComponent(component string) *embed.FS {
 	switch component {
 	case "recover":

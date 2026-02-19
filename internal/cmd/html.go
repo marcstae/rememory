@@ -62,12 +62,8 @@ func runHTML(cmd *cobra.Command, args []string) error {
 
 	case "recover":
 		// Generate generic recover.html (without personalization)
-		// Uses smaller recovery-only WASM
-		recoverWASM := html.GetRecoverWASMBytes()
-		if len(recoverWASM) == 0 {
-			return fmt.Errorf("recover.wasm not embedded - rebuild with 'make build'")
-		}
-		content = html.GenerateRecoverHTML(recoverWASM, version, githubURL, nil)
+		// Uses native JavaScript crypto (no WASM)
+		content = html.GenerateRecoverHTML(version, githubURL, nil)
 
 	case "create":
 		// Generate maker.html (bundle creation tool)

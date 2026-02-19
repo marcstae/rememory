@@ -22,9 +22,6 @@ var stylesCSS string
 //go:embed assets/wasm_exec.js
 var wasmExecJS string
 
-//go:embed assets/recover.wasm
-var recoverWASM []byte
-
 // Embedded assets for the bundle creation HTML
 
 //go:embed assets/maker.html
@@ -47,12 +44,6 @@ var dataflowJS string
 // createWASM is set at build time for the CLI binary (not for WASM builds)
 // This avoids circular dependency since create.wasm embeds the html package
 var createWASM []byte
-
-// GetRecoverWASMBytes returns the embedded recovery-only WASM binary.
-// This smaller WASM is used in recover.html for bundle distribution.
-func GetRecoverWASMBytes() []byte {
-	return recoverWASM
-}
 
 // GetCreateWASMBytes returns the full WASM binary with bundle creation.
 // This larger WASM is used in maker.html for the creation tool.

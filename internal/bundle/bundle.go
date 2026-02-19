@@ -22,7 +22,6 @@ import (
 type Config struct {
 	Version          string // Tool version (e.g., "v1.0.0")
 	GitHubReleaseURL string // URL to GitHub release for CLI download
-	WASMBytes        []byte // Compiled recover.wasm binary
 	RecoveryURL      string // Optional: base URL for QR code (e.g. "https://example.com/recover.html")
 	NoEmbedManifest  bool   // If true, do not embed MANIFEST.age in recover.html even when small enough
 }
@@ -99,7 +98,7 @@ func GenerateAll(p *project.Project, cfg Config) error {
 			personalization.ManifestB64 = base64.StdEncoding.EncodeToString(manifestData)
 		}
 
-		recoverHTML := html.GenerateRecoverHTML(cfg.WASMBytes, cfg.Version, cfg.GitHubReleaseURL, personalization)
+		recoverHTML := html.GenerateRecoverHTML(cfg.Version, cfg.GitHubReleaseURL, personalization)
 		recoverChecksum := core.HashString(recoverHTML)
 
 		bundlePath := filepath.Join(bundlesDir, fmt.Sprintf("bundle-%s.zip", core.SanitizeFilename(friend.Name)))

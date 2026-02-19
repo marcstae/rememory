@@ -7,6 +7,12 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug"
   },
+  "dependencies": {
+    "age-encryption": "^0.2.0",
+    "fflate": "^0.8.2",
+    "shamir-secret-sharing": "^0.0.4",
+    "tarparser": "^0.0.5"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/adm-zip": "^0.5.5",

@@ -103,40 +103,28 @@ test.describe('QR Scanner', () => {
   test('scanning a compact share adds it to the shares list', async ({ page, browserName }) => {
     test.skip(browserName === 'firefox', 'Firefox canvas.captureStream() does not produce a usable video stream for the mock scanner');
 
-    const [aliceDir, bobDir] = extractBundles(bundlesDir, ['Alice', 'Bob']);
-
+    const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
     const recovery = new RecoveryPage(page, aliceDir);
 
-    // Read Bob's PEM share
-    const bobReadme = fs.readFileSync(findReadmeFile(bobDir), 'utf8');
-    const pemMatch = bobReadme.match(
-      /-----BEGIN REMEMORY SHARE-----([\s\S]*?)-----END REMEMORY SHARE-----/
-    );
-    if (!pemMatch) throw new Error('No PEM share found');
-    const bobPemShare = pemMatch[0];
+    // Use a known valid compact share from golden fixtures (Bob, index 2)
+    const compactShare = 'RM2:2:5:3:4FCmWfgQHjkaGrtwLPqV4WB81u-ZeGKZekj7yukG2-zY:10c8';
 
-    // Mock BarcodeDetector + getUserMedia with a real canvas-based video stream
-    await page.addInitScript(() => {
+    // Mock BarcodeDetector to return our compact share after a few detect() calls
+    await page.addInitScript((compact: string) => {
       let detectCallCount = 0;
-      let compactShare = '';
-
-      (window as any).__qrTestSetCompact = (compact: string) => {
-        compactShare = compact;
-      };
 
       (window as any).BarcodeDetector = class {
         constructor() {}
         async detect() {
           detectCallCount++;
-          if (compactShare && detectCallCount > 3) {
-            return [{ rawValue: compactShare, format: 'qr_code', boundingBox: {}, cornerPoints: [] }];
+          if (detectCallCount > 3) {
+            return [{ rawValue: compact, format: 'qr_code', boundingBox: {}, cornerPoints: [] }];
           }
           return [];
         }
         static async getSupportedFormats() { return ['qr_code']; }
       };
 
-      // Use a real canvas capture stream so the video element gets readyState >= 2
       navigator.mediaDevices.getUserMedia = async () => {
         const canvas = document.createElement('canvas');
         canvas.width = 640;
@@ -146,30 +134,10 @@ test.describe('QR Scanner', () => {
         ctx.fillRect(0, 0, 640, 480);
         return canvas.captureStream(1);
       };
-    });
+    }, compactShare);
 
     await recovery.open();
     await recovery.expectShareCount(1);
-
-    // Convert Bob's PEM share to compact format via WASM
-    const compactShare = await page.evaluate((pem: string) => {
-      const result = (window as any).rememoryParseShare(pem);
-      if (result.error || !result.share) return '';
-      return result.share.compact;
-    }, bobPemShare);
-
-    expect(compactShare).toMatch(/^RM\d+:\d+:\d+:\d+:[A-Za-z0-9_-]+:[0-9a-f]{4}$/);
-
-    // Verify the compact share parses correctly
-    const parseResult = await page.evaluate((compact: string) => {
-      return (window as any).rememoryParseCompactShare(compact);
-    }, compactShare);
-    expect(parseResult.error).toBeFalsy();
-
-    // Set the compact share for the mock BarcodeDetector to "find"
-    await page.evaluate((compact: string) => {
-      (window as any).__qrTestSetCompact(compact);
-    }, compactShare);
 
     // Open scanner
     await page.locator('#scan-qr-btn').click();
@@ -185,29 +153,22 @@ test.describe('QR Scanner', () => {
   test('scanning a URL with fragment adds the share', async ({ page, browserName }) => {
     test.skip(browserName === 'firefox', 'Firefox canvas.captureStream() does not produce a usable video stream for the mock scanner');
 
-    const [aliceDir, bobDir] = extractBundles(bundlesDir, ['Alice', 'Bob']);
+    const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
+    const recovery = new RecoveryPage(page, aliceDir);
 
-    const bobReadme = fs.readFileSync(findReadmeFile(bobDir), 'utf8');
-    const pemMatch = bobReadme.match(
-      /-----BEGIN REMEMORY SHARE-----([\s\S]*?)-----END REMEMORY SHARE-----/
-    );
-    if (!pemMatch) throw new Error('No PEM share found');
+    // Use a known valid compact share from golden fixtures (Carol, index 3)
+    const compactShare = 'RM2:3:5:3:aKoRQv1shz6UZSAXvTLEXnS1zSQkTS3jhqA3-06G2jnA:6ec0';
+    const qrUrl = `https://eljojo.github.io/rememory/recover.html#share=${encodeURIComponent(compactShare)}`;
 
-    await page.addInitScript(() => {
-      let compactShare = '';
-
-      (window as any).__qrTestSetCompact = (compact: string) => {
-        compactShare = compact;
-      };
-
+    // Mock BarcodeDetector to return a URL with fragment
+    await page.addInitScript((url: string) => {
       let detectCallCount = 0;
+
       (window as any).BarcodeDetector = class {
         constructor() {}
         async detect() {
           detectCallCount++;
-          if (compactShare && detectCallCount > 3) {
-            // Return as a URL with fragment, like the QR code from a PDF would contain
-            const url = `https://eljojo.github.io/rememory/recover.html#share=${encodeURIComponent(compactShare)}`;
+          if (detectCallCount > 3) {
             return [{ rawValue: url, format: 'qr_code', boundingBox: {}, cornerPoints: [] }];
           }
           return [];
@@ -215,7 +176,6 @@ test.describe('QR Scanner', () => {
         static async getSupportedFormats() { return ['qr_code']; }
       };
 
-      // Use a real canvas capture stream so the video element gets readyState >= 2
       navigator.mediaDevices.getUserMedia = async () => {
         const canvas = document.createElement('canvas');
         canvas.width = 640;
@@ -225,22 +185,9 @@ test.describe('QR Scanner', () => {
         ctx.fillRect(0, 0, 640, 480);
         return canvas.captureStream(1);
       };
-    });
+    }, qrUrl);
 
-    const recovery = new RecoveryPage(page, aliceDir);
     await recovery.open();
-
-    // Convert PEM share to compact format via WASM
-    const compactShare = await page.evaluate((pem: string) => {
-      const result = (window as any).rememoryParseShare(pem);
-      if (result.error || !result.share) return '';
-      return result.share.compact;
-    }, pemMatch[0]);
-
-    await page.evaluate((compact: string) => {
-      (window as any).__qrTestSetCompact(compact);
-    }, compactShare);
-
     await page.locator('#scan-qr-btn').click();
 
     // Should detect the URL, extract the fragment, and add the share

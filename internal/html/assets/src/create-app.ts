@@ -230,10 +230,24 @@ declare let currentLang: string;
   }
 
   async function waitForWasm(): Promise<void> {
-    return window.rememoryUtils.waitForWasm().then(() => {
-      state.wasmReady = true;
-      elements.wasmLoadingIndicator?.classList.add('hidden');
-      checkGenerateReady();
+    return new Promise<void>((resolve, reject) => {
+      let pollTimer: ReturnType<typeof setTimeout>;
+      const timeout = setTimeout(() => {
+        clearTimeout(pollTimer);
+        reject(new Error('WASM load timed out'));
+      }, 15000);
+      const check = (): void => {
+        if (window.rememoryReady) {
+          clearTimeout(timeout);
+          state.wasmReady = true;
+          elements.wasmLoadingIndicator?.classList.add('hidden');
+          checkGenerateReady();
+          resolve();
+        } else {
+          pollTimer = setTimeout(check, 50);
+        }
+      };
+      check();
     });
   }
 

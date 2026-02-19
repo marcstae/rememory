@@ -606,3 +606,79 @@ test.describe('PDF Share Import', () => {
     await recovery.expectDownloadVisible();
   });
 });
+
+// ZIP Bundle Import tests - verify native JS ZIP extraction works
+test.describe('ZIP Bundle Import', () => {
+  let projectDir: string;
+  let bundlesDir: string;
+
+  test.beforeAll(async () => {
+    projectDir = createTestProject();
+    bundlesDir = path.join(projectDir, 'output', 'bundles');
+  });
+
+  test.afterAll(async () => {
+    cleanupProject(projectDir);
+  });
+
+  test('dropping a bundle ZIP extracts share and manifest', async ({ page }) => {
+    // Use a standalone recover.html (no personalization)
+    const standaloneHtml = path.join(projectDir, 'output', 'bundles', 'bundle-alice', 'recover.html');
+    const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
+    const recovery = new RecoveryPage(page, aliceDir);
+
+    // Open standalone recover.html
+    await recovery.openFile(path.join(aliceDir, 'recover.html'));
+
+    // Initially no shares
+    await recovery.expectShareCount(1); // Alice's share is pre-loaded
+
+    // Add Bob's bundle as ZIP file
+    await recovery.addBundleZip(bundlesDir, 'Bob');
+
+    // Bob's share should be extracted from ZIP
+    await recovery.expectShareCount(2);
+    await recovery.expectShareHolder('Bob');
+
+    // Manifest should be loaded from ZIP
+    await recovery.expectManifestLoaded();
+
+    // Should be ready to recover
+    await recovery.expectReadyToRecover();
+
+    // Recovery should complete
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(3);
+    await recovery.expectDownloadVisible();
+
+    // Loading indicator should be gone
+    await recovery.expectNoLoadingIndicator();
+  });
+
+  test('adding second share via bundle ZIP completes recovery', async ({ page }) => {
+    // Start with Alice's personalized recover.html (share + manifest embedded)
+    const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
+    const recovery = new RecoveryPage(page, aliceDir);
+    await recovery.open();
+
+    // Alice's share is pre-loaded
+    await recovery.expectShareCount(1);
+    await recovery.expectShareHolder('Alice');
+
+    // Need one more share (threshold = 2)
+    await recovery.expectNeedMoreShares(1);
+
+    // Add Bob's bundle ZIP (not extracted, the actual ZIP file)
+    await recovery.addBundleZip(bundlesDir, 'Bob');
+
+    // Bob's share should be extracted from ZIP
+    await recovery.expectShareCount(2);
+    await recovery.expectShareHolder('Bob');
+
+    // Recovery should complete
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(3);
+    await recovery.expectDownloadVisible();
+    await recovery.expectNoLoadingIndicator();
+  });
+});

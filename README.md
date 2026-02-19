@@ -93,8 +93,8 @@ Each friend gets a ZIP bundle containing:
 |------|---------|
 | `README.txt` | Instructions, their unique share, contact list |
 | `README.pdf` | Same content, formatted for printing |
-| `MANIFEST.age` | Your encrypted files |
-| `recover.html` | Recovery tool (~1.8 MB), runs in any browser |
+| `MANIFEST.age` | Your encrypted files (only included separately when over 10 MB) |
+| `recover.html` | Recovery tool (~300 KB), runs in any browser. For smaller archives, everything is embedded — just open this file |
 
 **A single share reveals nothing.** But tell your friends to keep their bundle somewhere safe — it's their responsibility to you.
 
@@ -186,7 +186,7 @@ See the **[Security Audit](docs/security-audit.md)** for details.
 | A friend loses their bundle? | Fine, as long as threshold friends remain |
 | A friend leaks their share publicly? | Harmless without threshold-1 other shares |
 | ReMemory disappears in 10 years? | `recover.html` still works — it's self-contained |
-| Browsers change dramatically? | Plain HTML + WASM with no external dependencies |
+| Browsers change dramatically? | Pure JavaScript with no external dependencies |
 | You forget how this works? | Each bundle's README.txt explains everything |
 | Some friends can't be reached? | That's why you set threshold below total friends |
 
@@ -263,7 +263,11 @@ Apache-2.0 — Copyright 2026 José Albornoz
 
 Built on:
 - [age](https://github.com/FiloSottile/age) — Modern file encryption by Filippo Valsorda
-- [HashiCorp Vault's Shamir implementation](https://github.com/hashicorp/vault) — Shamir's Secret Sharing
+- [age-encryption](https://github.com/FiloSottile/typage) — TypeScript age implementation, also by Filippo Valsorda
+- [shamir-secret-sharing](https://github.com/privy-io/shamir-secret-sharing) — Audited Shamir's Secret Sharing by Privy (browser recovery)
+- [HashiCorp Vault's Shamir implementation](https://github.com/hashicorp/vault/blob/main/shamir/shamir.go) — Shamir's Secret Sharing (CLI)
+- [fflate](https://github.com/101arrowz/fflate) — Fast JavaScript compression
+- [tarparser](https://github.com/highercomve/tarparser) — Tar archive extraction
 - [Cobra](https://github.com/spf13/cobra) — CLI framework
 
 The protocol was [originally designed in a Google Doc](https://docs.google.com/document/d/1B4_wIN3fXqb67Tln0v5v2pMRFf8v5umkKikaqCRAdyM/edit?usp=sharing) in 2023.

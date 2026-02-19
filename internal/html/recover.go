@@ -20,7 +20,7 @@ type FriendInfo struct {
 // MaxEmbeddedManifestSize is the maximum size of MANIFEST.age that will be
 // embedded (base64-encoded) in recover.html. Manifests at or below this size
 // are included so recovery can work without the separate MANIFEST.age file.
-const MaxEmbeddedManifestSize = 5 << 20 // 5 MiB
+const MaxEmbeddedManifestSize = 10 << 20 // 10 MiB
 
 // PersonalizationData holds the data to personalize recover.html for a specific friend.
 type PersonalizationData struct {
@@ -34,15 +34,19 @@ type PersonalizationData struct {
 }
 
 // GenerateRecoverHTML creates the complete recover.html with all assets embedded.
-// wasmBytes should be the compiled recover.wasm binary.
+// Uses native JavaScript crypto (no WASM required).
 // version is the rememory version string.
 // githubURL is the URL to download CLI binaries.
 // personalization can be nil for a generic recover.html, or provided to personalize for a specific friend.
-func GenerateRecoverHTML(wasmBytes []byte, version, githubURL string, personalization *PersonalizationData) string {
+func GenerateRecoverHTML(version, githubURL string, personalization *PersonalizationData) string {
 	html := recoverHTMLTemplate
 
 	// Embed translations
 	html = strings.Replace(html, "{{TRANSLATIONS}}", translations.GetTranslationsJS("recover"), 1)
+
+	// Embed README basenames for ZIP extraction
+	readmeNames, _ := json.Marshal(translations.ReadmeBasenames())
+	html = strings.Replace(html, "{{README_NAMES}}", string(readmeNames), 1)
 
 	// Embed language picker (generated from translations.LangNames)
 	html = strings.Replace(html, "{{LANG_OPTIONS}}", translations.LangSelectOptions(), 1)
@@ -51,15 +55,8 @@ func GenerateRecoverHTML(wasmBytes []byte, version, githubURL string, personaliz
 	// Embed styles
 	html = strings.Replace(html, "{{STYLES}}", stylesCSS, 1)
 
-	// Embed wasm_exec.js
-	html = strings.Replace(html, "{{WASM_EXEC}}", wasmExecJS, 1)
-
-	// Embed shared.js + app.js
+	// Embed shared.js + app.js (native crypto bundled in app.js)
 	html = strings.Replace(html, "{{APP_JS}}", sharedJS+"\n"+appJS, 1)
-
-	// Embed WASM as gzip-compressed base64 (reduces size by ~70%)
-	wasmB64 := compressAndEncode(wasmBytes)
-	html = strings.Replace(html, "{{WASM_BASE64}}", wasmB64, 1)
 
 	// Replace version and GitHub URL
 	html = strings.Replace(html, "{{VERSION}}", version, 1)

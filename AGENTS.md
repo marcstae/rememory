@@ -6,15 +6,29 @@ This file provides guidance for contributors and coding agents in this repositor
 
 ReMemory encrypts files with [age](https://github.com/FiloSottile/age), splits the decryption key among trusted friends using Shamir's Secret Sharing (via HashiCorp Vault's implementation), and gives each friend a self-contained offline recovery tool (`recover.html`) that works in any browser without servers or internet.
 
+## Ownership Mindset
+
+**You own the outcome, not just the task.** This isn't typical software where bugs get patched next sprint. A recovery bundle might sit in a drawer for ten years, then be opened by someone who just lost a loved one. You won't be there to fix it. The code you write today must work perfectly for someone you'll never meet, in circumstances you can't predict.
+
+This changes how you work:
+
+- **Search before creating.** Before adding a constant, helper, or type, grep for where it might already exist. Data should have one source of truth. If you need a list of values, find where the authoritative list lives and derive from it — don't create a second copy that will drift.
+- **Trace all connections.** When removing or changing something, find every reference: code, styles, translations, types, tests, comments, build config. Use grep. Removing a feature means removing the HTML elements, the CSS classes, the translation keys, the JS functions, the tests — all of it. If you're surprised by leftover references after making a change, you didn't trace thoroughly enough.
+- **Delete, don't hide.** If something shouldn't exist, remove it completely. Don't comment it out, don't hide it with CSS, don't wrap it in a conditional. Dead code is confusing code.
+- **Verify before claiming done.** After any change, grep for related terms, rebuild, run tests. You should never be surprised by leftover references — you should have found them first.
+- **Understand the system before changing it.** Read the existing implementation. Understand why it works the way it does. Match its patterns and standards.
+
+The goal is simple: when someone opens `recover.html` years from now, everything should just work. That requires code written by someone who cared enough to get every detail right.
+
 ## Development Principles
 
-- **Care and attention to detail.** This software protects important information for real people. Mistakes can mean lost secrets, failed recoveries, or leaked data. Be thorough and thoughtful.
+- **Care and attention to detail.** This software protects important information for real people. Mistakes can mean lost secrets, failed recoveries, or leaked data. Being thorough means checking your own work, matching the standards already in the codebase, and not leaving loose ends for others to find.
 - **Empathy.** The people recovering secrets may be non-technical, stressed, or grieving. Every message, instruction, and UI choice should be clear, patient, and helpful. Lend a hand, don't assume expertise.
 - **Stand the test of time.** Recovery bundles may sit untouched for years or decades before they're needed. Avoid dependencies on external services, ephemeral formats, or assumptions about the future. The bundles must work even if this project disappears.
 - **Universality.** The recovery experience must work across platforms, browsers, and languages.
 - **Considered tone.** When writing user-facing copy, every word should feel placed, not emitted. Stay honest about what this tool is and isn't. Don't oversell or make grand claims. See the **Voice & Copy** section below for detailed guidance.
-- **Shared logic across CLI and WASM.** Cryptographic operations and core logic live in `internal/core/` and are reused by both the CLI and browser paths. Don't duplicate — centralize.
-- **Tests verify safety.** Write a failing test first, then make it pass. This applies everywhere — Go unit tests, integration tests, and Playwright browser tests alike. If you can't demonstrate the test failing without your change, you can't be sure it's actually testing anything. Any change that touches `recover.html` or `maker.html` needs a corresponding Playwright test.
+- **Shared logic across CLI and browser.** Cryptographic operations and core logic live in `internal/core/` and are reused by both the CLI and browser paths. Don't duplicate — centralize. Before creating a new constant or helper, grep to see if it already exists elsewhere. Data should have one source of truth.
+- **Tests verify safety.** Write a failing test first, then make it pass. This applies everywhere — Go unit tests, integration tests, and Playwright browser tests alike. If you can't demonstrate the test failing without your change, you can't be sure it's actually testing anything. Any change that touches `recover.html` or `maker.html` needs a corresponding Playwright test. Run the tests yourself before calling something done — don't leave verification to others.
 - **Keep docs current.** When changing behavior, update the relevant docs, README, and this AGENTS.md file in the same change.
 - **No network in recovery.** `recover.html` must not make network requests. Avoid adding dependencies that could pull remote resources (fonts, CDNs, analytics, etc.).
 - **Stable formats.** The share format, bundle layout, and recovery steps are part of the protocol. Changing them requires migration thinking, updated test fixtures, and clear rationale.
@@ -108,7 +122,7 @@ These must not regress. Reference them in reviews.
 ## Build & Development Commands
 
 ```bash
-make build          # Build WASM modules (recover.wasm + create.wasm), compile TypeScript, then build CLI binary
+make build          # Compile TypeScript, build create.wasm, then build CLI binary
 make test           # Run all Go tests (go test -v ./...)
 make lint           # Run go vet + gofmt check
 make test-e2e       # Run Playwright browser tests (requires: npm install, npx playwright install)
@@ -121,34 +135,33 @@ Run a single test:
 go test -v -run TestName ./internal/core/
 ```
 
-The build pipeline is: **TypeScript (esbuild) -> WASM (two targets) -> Go binary**. Always use `make test` instead of bare `go test ./...` — the Go build embeds compiled `.wasm` and `.js` files via `//go:embed`, so `go test` will fail if those assets haven't been generated first by `make wasm`.
+The build pipeline is: **TypeScript (esbuild) -> WASM (for maker.html) -> Go binary**. Always use `make test` instead of bare `go test ./...` — the Go build embeds compiled `.wasm` and `.js` files via `//go:embed`, so `go test` will fail if those assets haven't been generated first.
 
 ## Architecture
 
-### Two WASM targets
+### WASM and Native JS
 
-The same `internal/wasm/` package produces two WASM binaries controlled by build tags. `make wasm` builds both and writes them to `internal/html/assets/`:
-
-- **`recover.wasm`** (no tags) — Recovery-only, small (~1.8MB). Embedded in every friend's `recover.html` bundle. Entry point: `main_recover.go`.
-  `GOOS=js GOARCH=wasm go build -o internal/html/assets/recover.wasm ./internal/wasm`
-- **`create.wasm`** (`-tags create`) — Full creation + recovery. Used by `maker.html` (web UI). Entry point: `main_create.go`.
+- **`recover.html`** uses **native JavaScript crypto** (no WASM). Dependencies like `age-encryption`, `shamir-secret-sharing`, `fflate`, and `tarparser` are bundled via esbuild into `app.js`. This keeps bundles small (~170KB) and avoids WASM compatibility issues.
+- **`maker.html`** uses **WASM** (`create.wasm`) for bundle creation. Built with `-tags create` from `internal/wasm/`. Entry point: `main_create.go`.
   `GOOS=js GOARCH=wasm go build -tags create -o internal/html/assets/create.wasm ./internal/wasm`
 
-Both expose Go functions to JavaScript via `syscall/js` (registered in their respective `main_*.go` files), with the JS bridge in `js_wrappers.go`.
+The WASM module exposes Go functions to JavaScript via `syscall/js` (registered in `main_create.go`), with the JS bridge in `js_wrappers.go`.
 
 `make html` generates self-contained HTML files into `dist/` (`index.html`, `maker.html`, `docs.html`, `recover.html`).
 
 ### HTML generation with embedded assets
 
-`internal/html/embed.go` uses `//go:embed` to bundle all assets (HTML templates, CSS, JS, WASM) into the Go binary. The `recover.go`, `maker.go`, `docs.go`, and `index.go` files in `internal/html/` generate self-contained HTML by string-replacing `{{PLACEHOLDER}}` tokens with embedded assets. WASM is gzip-compressed and base64-encoded inline.
+`internal/html/embed.go` uses `//go:embed` to bundle all assets (HTML templates, CSS, JS) into the Go binary. The `recover.go`, `maker.go`, `docs.go`, and `index.go` files in `internal/html/` generate self-contained HTML by string-replacing `{{PLACEHOLDER}}` tokens with embedded assets.
 
-**Circular dependency avoidance:** `create.wasm` itself embeds the html package (for bundle creation), so `create.wasm` cannot be embedded via `//go:embed` in the html package. Instead, the CLI binary loads `create.wasm` at init time and injects it via `html.SetCreateWASMBytes()`.
+For `maker.html`, WASM is gzip-compressed and base64-encoded inline. **Circular dependency avoidance:** `create.wasm` itself embeds the html package (for bundle creation), so `create.wasm` cannot be embedded via `//go:embed` in the html package. Instead, the CLI binary loads `create.wasm` at init time and injects it via `html.SetCreateWASMBytes()`.
+
+For `recover.html`, no WASM is needed — all crypto is native JavaScript bundled in `app.js`.
 
 ### Bundle generation
 
 Each friend's ZIP bundle contains: `README.txt`, `README.pdf`, `MANIFEST.age`, and a personalized `recover.html` (with their share pre-loaded and contact list embedded). Generated by `internal/bundle/`.
 
-When `MANIFEST.age` is 5 MB or less, it is also base64-encoded and embedded in the personalization JSON inside `recover.html` (`PersonalizationData.ManifestB64`). This lets recovery work without the separate file. The CLI flag `--no-embed-manifest` on `seal` and `bundle` commands disables this. The WASM/maker path always embeds when small enough.
+When `MANIFEST.age` is 10 MB or less, it is also base64-encoded and embedded in the personalization JSON inside `recover.html` (`PersonalizationData.ManifestB64`). This lets recovery work without the separate file. The CLI flag `--no-embed-manifest` on `seal` and `bundle` commands disables this. The WASM/maker path always embeds when small enough.
 
 - `internal/bundle/readme.go` — Generates README.txt (Go string builder, not a template)
 - `internal/pdf/readme.go` — Generates README.pdf (via go-pdf/fpdf)
@@ -167,9 +180,11 @@ When `MANIFEST.age` is 5 MB or less, it is also base64-encoded and embedded in t
 ### TypeScript
 
 Frontend code lives in `internal/html/assets/src/`. Compiled via esbuild to IIFE bundles (not ES modules):
-- `shared.ts` — Common utilities (share parsing, WASM loading)
-- `app.ts` — Recovery UI (`recover.html`)
-- `create-app.ts` — Bundle creation UI (`maker.html`)
+- `shared.ts` — Common utilities (toast notifications, formatting)
+- `app.ts` — Recovery UI (`recover.html`), uses native JS crypto from `crypto/` subdirectory
+- `create-app.ts` — Bundle creation UI (`maker.html`), uses WASM
+
+The `crypto/` subdirectory contains the native JavaScript crypto implementations for recovery: Shamir combining, age decryption, tar.gz extraction, share parsing, BIP39 word encoding. These replace the WASM module that was previously used.
 
 ## Testing
 
@@ -190,9 +205,23 @@ Three workflows in `.github/workflows/`:
 - **Discuss before building big things.** For major features, refactors, or architectural changes, open an issue to discuss the approach first. Once there's agreement on a plan, break the work into sub-issues and land it incrementally. Don't open a large PR out of the blue.
 - **Bug fixes and small improvements can go straight to PR.** Not everything needs a discussion — use your judgment. If the change is self-contained and obvious, just open the PR.
 
+### Changelog
+
+`CHANGELOG.md` entries should focus on **what changed for the person using ReMemory**, not on implementation details. Lead with the user-facing outcome, then explain just enough context for it to make sense.
+
+- **Good:** "Encrypted archives up to 10 MB are now embedded directly in `recover.html`. More people will be able to recover by just opening the HTML file."
+- **Bad:** "Raised `MaxEmbeddedManifestSize` from 5 MB to 10 MB."
+
+Think about what someone deciding whether to upgrade would want to know. Internal refactors, constant changes, and code reorganization don't belong unless they affect what people experience. Follow the voice and cadence of existing entries — read a few before writing a new one.
+
 ## Nix
 
-This project includes a Nix flake for reproducible development environments. If you have Nix installed:
+This project uses a Nix flake for reproducible development environments. **When a command fails to find a dependency (e.g., `esbuild`, `go`), use `nix develop -c` — do not work around it with `npx` or other alternatives.**
 
-- Prefix commands with `nix develop -c` if they fail to find dependencies (e.g., `nix develop -c make test`).
-- If `make` itself doesn't resolve correctly, use the system make directly: `/usr/bin/make`.
+```bash
+nix develop -c make build    # Build everything
+nix develop -c make test     # Run tests
+nix develop -c make test-e2e # Run Playwright tests
+```
+
+If `make` itself doesn't resolve, use `/usr/bin/make` directly.
