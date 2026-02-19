@@ -20,6 +20,7 @@ import {
   decrypt,
   extractTarGz,
   extractBundle,
+  extractPersonalizationFromHTML,
   decodeShareWords,
   type ParsedShare,
 } from './crypto';
@@ -690,40 +691,21 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   async function handleShareFromHTML(file: File): Promise<void> {
     const text = await readFileAsText(file);
 
-    // Extract PERSONALIZATION JSON from the HTML
-    const match = text.match(/window\.PERSONALIZATION\s*=\s*(\{[^\n]*\})\s*;/);
-    if (!match || !match[1]) {
-      if (elements.shareDropZone) {
-        showError(
-          t('error_no_share_message', file.name),
-          {
-            title: t('error_no_share_title'),
-            guidance: t('error_html_no_share_guidance'),
-            inline: true,
-            targetElement: elements.shareDropZone
-          }
-        );
-      }
+    const personalizationData = extractPersonalizationFromHTML(text);
+    if (!personalizationData || !personalizationData.holderShare) {
+      showError(
+        t('error_no_share_message', file.name),
+        {
+          title: t('error_no_share_title'),
+          guidance: t('error_html_no_share_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
       return;
     }
 
     try {
-      const personalizationData = JSON.parse(match[1]);
-      if (!personalizationData.holderShare) {
-        if (elements.shareDropZone) {
-          showError(
-            t('error_no_share_message', file.name),
-            {
-              title: t('error_no_share_title'),
-              guidance: t('error_html_no_share_guidance'),
-              inline: true,
-              targetElement: elements.shareDropZone
-            }
-          );
-        }
-        return;
-      }
-
       // Parse and add the share
       const share = await parseShare(personalizationData.holderShare);
       share.compact = await encodeCompact(share);
@@ -753,18 +735,16 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       }
 
       checkRecoverReady();
-    } catch {
-      if (elements.shareDropZone) {
-        showError(
-          t('error_no_share_message', file.name),
-          {
-            title: t('error_no_share_title'),
-            guidance: t('error_html_no_share_guidance'),
-            inline: true,
-            targetElement: elements.shareDropZone
-          }
-        );
-      }
+    } catch (err) {
+      showError(
+        t('error_no_share_message', file.name),
+        {
+          title: t('error_no_share_title'),
+          guidance: err instanceof Error ? err.message : t('error_html_no_share_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
     }
   }
 
@@ -799,18 +779,16 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       }
 
       checkRecoverReady();
-    } catch {
-      if (elements.shareDropZone) {
-        showError(
-          t('error_bundle_extract_message', file.name),
-          {
-            title: t('error_bundle_extract_title'),
-            guidance: t('error_bundle_extract_guidance'),
-            inline: true,
-            targetElement: elements.shareDropZone
-          }
-        );
-      }
+    } catch (err) {
+      showError(
+        t('error_bundle_extract_message', file.name),
+        {
+          title: t('error_bundle_extract_title'),
+          guidance: err instanceof Error ? err.message : t('error_bundle_extract_guidance'),
+          inline: true,
+          targetElement: elements.shareDropZone || undefined
+        }
+      );
     }
   }
 
@@ -983,40 +961,21 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   async function handleManifestFromHTML(file: File): Promise<void> {
     const text = await readFileAsText(file);
 
-    // Extract PERSONALIZATION JSON from the HTML
-    const match = text.match(/window\.PERSONALIZATION\s*=\s*(\{[^\n]*\})\s*;/);
-    if (!match || !match[1]) {
-      if (elements.manifestDropZone) {
-        showError(
-          t('error_wrong_manifest_message', file.name),
-          {
-            title: t('error_wrong_manifest_title'),
-            guidance: t('error_html_no_manifest_guidance'),
-            inline: true,
-            targetElement: elements.manifestDropZone
-          }
-        );
-      }
+    const personalizationData = extractPersonalizationFromHTML(text);
+    if (!personalizationData || !personalizationData.manifestB64) {
+      showError(
+        t('error_wrong_manifest_message', file.name),
+        {
+          title: t('error_wrong_manifest_title'),
+          guidance: t('error_html_no_manifest_guidance'),
+          inline: true,
+          targetElement: elements.manifestDropZone || undefined
+        }
+      );
       return;
     }
 
     try {
-      const personalizationData = JSON.parse(match[1]);
-      if (!personalizationData.manifestB64) {
-        if (elements.manifestDropZone) {
-          showError(
-            t('error_wrong_manifest_message', file.name),
-            {
-              title: t('error_wrong_manifest_title'),
-              guidance: t('error_html_no_manifest_guidance'),
-              inline: true,
-              targetElement: elements.manifestDropZone
-            }
-          );
-        }
-        return;
-      }
-
       const binary = atob(personalizationData.manifestB64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
@@ -1045,17 +1004,15 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
       checkRecoverReady();
     } catch {
-      if (elements.manifestDropZone) {
-        showError(
-          t('error_wrong_manifest_message', file.name),
-          {
-            title: t('error_wrong_manifest_title'),
-            guidance: t('error_html_no_manifest_guidance'),
-            inline: true,
-            targetElement: elements.manifestDropZone
-          }
-        );
-      }
+      showError(
+        t('error_wrong_manifest_message', file.name),
+        {
+          title: t('error_wrong_manifest_title'),
+          guidance: t('error_html_no_manifest_guidance'),
+          inline: true,
+          targetElement: elements.manifestDropZone || undefined
+        }
+      );
     }
   }
 

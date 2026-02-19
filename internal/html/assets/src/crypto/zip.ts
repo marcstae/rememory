@@ -34,7 +34,7 @@ function isHTML(data: Uint8Array): boolean {
 /**
  * Extract personalization data from HTML content.
  */
-function extractPersonalizationFromHTML(
+export function extractPersonalizationFromHTML(
   htmlContent: string
 ): { holderShare?: string; holder?: string; manifestB64?: string } | null {
   const match = htmlContent.match(

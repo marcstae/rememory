@@ -68,8 +68,9 @@ export async function parseShare(content: string): Promise<ParsedShare> {
   const created = headers['Created'];
   const checksum = headers['Checksum'];
 
-  if (version === 0 || index === 0 || total === 0 || threshold === 0) {
-    throw new Error('invalid share: missing required fields');
+  if (isNaN(version) || isNaN(index) || isNaN(total) || isNaN(threshold) ||
+      version === 0 || index === 0 || total === 0 || threshold === 0) {
+    throw new Error('invalid share: missing or invalid required fields');
   }
 
   // Decode base64 data (standard base64 in PEM)

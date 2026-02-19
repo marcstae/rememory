@@ -65,6 +65,7 @@
   "error_wrong_manifest_title": "Tipo de arquivo incorreto",
   "error_wrong_manifest_message": "O arquivo \"{0}\" não é um arquivo criptografado.",
   "error_wrong_manifest_guidance": "Você pode arrastar um recover.html de qualquer pacote de amigo, ou um arquivo MANIFEST.age se tiver um.",
+  "error_html_no_share_guidance": "Este recover.html não contém uma parte de recuperação. Peça ao seu amigo para reenviar o pacote, ou use o arquivo LEIA-ME.txt.",
   "error_html_no_manifest_guidance": "Este recover.html não tem os dados criptografados embutidos. Tente o recover.html de um amigo diferente, ou use um arquivo MANIFEST.age.",
   "error_paste_no_share_title": "Nenhuma parte no texto colado",
   "error_paste_no_share_message": "O texto colado não contém uma parte de recuperação válida.",

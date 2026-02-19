@@ -65,6 +65,7 @@
   "error_wrong_manifest_title": "Tipo de archivo incorrecto",
   "error_wrong_manifest_message": "El archivo \"{0}\" no es un archivo encriptado.",
   "error_wrong_manifest_guidance": "Arrastra un recover.html del kit de cualquier amigo, o un archivo MANIFEST.age.",
+  "error_html_no_share_guidance": "Este recover.html no contiene una parte de recuperación. Pide a tu amigo que reenvíe su kit, o usa el archivo LEEME.txt.",
   "error_html_no_manifest_guidance": "Este recover.html no tiene los datos encriptados integrados. Prueba con el recover.html de otro amigo, o usa un archivo MANIFEST.age.",
   "error_paste_no_share_title": "No hay parte en el texto",
   "error_paste_no_share_message": "El texto pegado no contiene una parte de recuperación válida.",

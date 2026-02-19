@@ -231,7 +231,9 @@ declare let currentLang: string;
 
   async function waitForWasm(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      let pollTimer: ReturnType<typeof setTimeout>;
       const timeout = setTimeout(() => {
+        clearTimeout(pollTimer);
         reject(new Error('WASM load timed out'));
       }, 15000);
       const check = (): void => {
@@ -242,7 +244,7 @@ declare let currentLang: string;
           checkGenerateReady();
           resolve();
         } else {
-          setTimeout(check, 50);
+          pollTimer = setTimeout(check, 50);
         }
       };
       check();

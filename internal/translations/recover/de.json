@@ -65,6 +65,7 @@
   "error_wrong_manifest_title": "Falscher Dateityp",
   "error_wrong_manifest_message": "Die Datei \"{0}\" ist kein verschlüsseltes Archiv.",
   "error_wrong_manifest_guidance": "Ziehe eine recover.html aus dem Paket eines Freundes oder eine MANIFEST.age-Datei hierher.",
+  "error_html_no_share_guidance": "Diese recover.html enthält keinen Wiederherstellungsteil. Bitte deinen Freund, sein Paket erneut zu senden, oder verwende die LIESMICH.txt-Datei.",
   "error_html_no_manifest_guidance": "Diese recover.html enthält keine eingebetteten verschlüsselten Daten. Versuche die recover.html eines anderen Freundes oder verwende eine MANIFEST.age-Datei.",
   "error_paste_no_share_title": "Kein Teil im Text",
   "error_paste_no_share_message": "Der eingefügte Text enthält keinen gültigen Wiederherstellungsteil.",

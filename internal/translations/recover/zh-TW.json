@@ -65,6 +65,7 @@
   "error_wrong_manifest_title": "錯誤的檔案類型",
   "error_wrong_manifest_message": "檔案「{0}」不是加密封存檔。",
   "error_wrong_manifest_guidance": "請拖放任一朋友保管的復原包的 recover.html 或 MANIFEST.age。",
+  "error_html_no_share_guidance": "這個 recover.html 不包含金鑰片段。請要求你的朋友重新傳送復原包，或改用 README.txt。",
   "error_html_no_manifest_guidance": "這個 recover.html 沒有嵌入加密封存檔，請嘗試使用其他朋友復原包中的 recover.html 或使用 MANIFEST.age。",
   "error_paste_no_share_title": "貼上的文字沒有金鑰片段",
   "error_paste_no_share_message": "貼上的文字不含有效的金鑰片段。",

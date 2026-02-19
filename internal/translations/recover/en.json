@@ -65,6 +65,7 @@
   "error_wrong_manifest_title": "Wrong file type",
   "error_wrong_manifest_message": "The file \"{0}\" is not an encrypted archive.",
   "error_wrong_manifest_guidance": "Drag a recover.html from any friend's bundle, or a MANIFEST.age file.",
+  "error_html_no_share_guidance": "This recover.html doesn't contain a recovery piece. Ask your friend to resend their bundle, or use the README.txt file instead.",
   "error_html_no_manifest_guidance": "This recover.html does not have the encrypted data embedded. Try a different friend's recover.html, or use a MANIFEST.age file.",
   "error_paste_no_share_title": "No piece in pasted text",
   "error_paste_no_share_message": "The pasted text doesn't contain a valid recovery piece.",

@@ -17,4 +17,4 @@ export {
   ALL_LANGS,
   type Lang,
 } from './wordlist';
-export { extractBundle, type BundleContents } from './zip';
+export { extractBundle, extractPersonalizationFromHTML, type BundleContents } from './zip';
