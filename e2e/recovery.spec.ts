@@ -130,14 +130,11 @@ test.describe('Browser Recovery Tool', () => {
 
     await recovery.open();
 
-    // Alice's share is pre-loaded
+    // Alice's share is pre-loaded, manifest is embedded
     await recovery.expectShareCount(1);
-
-    // Load manifest first
-    await recovery.addManifest();
     await recovery.expectManifestLoaded();
 
-    // Add Bob's share - should trigger auto-recovery
+    // Add Bob's share — should trigger auto-recovery
     await recovery.addShares(bobDir);
 
     // Recovery should complete automatically
@@ -155,10 +152,7 @@ test.describe('Browser Recovery Tool', () => {
     // Steps 1 and 2 should be visible initially
     await recovery.expectStepsVisible();
 
-    // Load manifest first
-    await recovery.addManifest();
-
-    // Add Bob's share - triggers auto-recovery
+    // Add Bob's share — triggers auto-recovery
     await recovery.addShares(bobDir);
 
     // Steps should collapse
@@ -187,11 +181,8 @@ test.describe('Browser Recovery Tool', () => {
 
     await recovery.open();
 
-    // Alice's share is pre-loaded via personalization
+    // Alice's share is pre-loaded via personalization, manifest is embedded
     await recovery.expectShareCount(1);
-
-    // Load manifest
-    await recovery.addManifest();
     await recovery.expectManifestLoaded();
 
     // Add Bob's share (triggers auto-recovery)
@@ -316,12 +307,9 @@ test.describe('Anonymous Bundle Recovery', () => {
 
     await recovery.open();
 
-    // Share 1 is pre-loaded
+    // Share 1 is pre-loaded, manifest is embedded
     await recovery.expectShareCount(1);
     await recovery.expectShareHolder('Share 1');
-
-    // Load manifest
-    await recovery.addManifest();
     await recovery.expectManifestLoaded();
 
     // Add Share 2 (triggers auto-recovery since threshold is 2)
@@ -352,6 +340,8 @@ test.describe('Anonymous Bundle Recovery', () => {
 test.describe('Generic recover.html (no personalization)', () => {
   let projectDir: string;
   let bundlesDir: string;
+  let noEmbedProjectDir: string;
+  let noEmbedBundlesDir: string;
   let standaloneRecoverHtml: string;
   let tmpDir: string;
 
@@ -364,12 +354,15 @@ test.describe('Generic recover.html (no personalization)', () => {
 
     projectDir = createTestProject();
     bundlesDir = path.join(projectDir, 'output', 'bundles');
+    noEmbedProjectDir = createTestProject({ noEmbedManifest: true });
+    noEmbedBundlesDir = path.join(noEmbedProjectDir, 'output', 'bundles');
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-generic-e2e-'));
     standaloneRecoverHtml = generateStandaloneHTML(tmpDir, 'recover');
   });
 
   test.afterAll(async () => {
     cleanupProject(projectDir);
+    cleanupProject(noEmbedProjectDir);
     if (tmpDir && fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -468,6 +461,29 @@ test.describe('Generic recover.html (no personalization)', () => {
     // Recovery should complete automatically (threshold backfilled from Bob's share)
     await recovery.expectRecoveryComplete();
     await recovery.expectFileCount(3); // secret.txt, notes.txt, README.md
+    await recovery.expectDownloadVisible();
+  });
+
+  test('standalone recovery with separate MANIFEST.age file', async ({ page }) => {
+    const [aliceDir, bobDir] = extractBundles(noEmbedBundlesDir, ['Alice', 'Bob']);
+    const recovery = new RecoveryPage(page, tmpDir);
+
+    await recovery.openFile(standaloneRecoverHtml);
+    await recovery.expectShareCount(0);
+
+    // Add shares from README.txt files (from noEmbedManifest bundles)
+    await recovery.addShares(aliceDir, bobDir);
+    await recovery.expectShareCount(2);
+
+    // Load MANIFEST.age file directly (these bundles have it as a separate file)
+    const manifestPath = path.join(aliceDir, 'MANIFEST.age');
+    expect(fs.existsSync(manifestPath)).toBeTruthy();
+    await recovery.addManifestFile(manifestPath);
+    await recovery.expectManifestLoaded();
+
+    // Recovery should complete
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(3);
     await recovery.expectDownloadVisible();
   });
 });
@@ -584,12 +600,9 @@ test.describe('PDF Share Import', () => {
 
     await recovery.open();
 
-    // Alice's share is pre-loaded via personalization
+    // Alice's share is pre-loaded via personalization, manifest is embedded
     await recovery.expectShareCount(1);
     await recovery.expectShareHolder('Alice');
-
-    // Load manifest
-    await recovery.addManifest();
     await recovery.expectManifestLoaded();
 
     // Add Bob's share via PDF file
@@ -621,40 +634,6 @@ test.describe('ZIP Bundle Import', () => {
     cleanupProject(projectDir);
   });
 
-  test('dropping a bundle ZIP extracts share and manifest', async ({ page }) => {
-    // Use a standalone recover.html (no personalization)
-    const standaloneHtml = path.join(projectDir, 'output', 'bundles', 'bundle-alice', 'recover.html');
-    const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
-    const recovery = new RecoveryPage(page, aliceDir);
-
-    // Open standalone recover.html
-    await recovery.openFile(path.join(aliceDir, 'recover.html'));
-
-    // Initially no shares
-    await recovery.expectShareCount(1); // Alice's share is pre-loaded
-
-    // Add Bob's bundle as ZIP file
-    await recovery.addBundleZip(bundlesDir, 'Bob');
-
-    // Bob's share should be extracted from ZIP
-    await recovery.expectShareCount(2);
-    await recovery.expectShareHolder('Bob');
-
-    // Manifest should be loaded from ZIP
-    await recovery.expectManifestLoaded();
-
-    // Should be ready to recover
-    await recovery.expectReadyToRecover();
-
-    // Recovery should complete
-    await recovery.expectRecoveryComplete();
-    await recovery.expectFileCount(3);
-    await recovery.expectDownloadVisible();
-
-    // Loading indicator should be gone
-    await recovery.expectNoLoadingIndicator();
-  });
-
   test('adding second share via bundle ZIP completes recovery', async ({ page }) => {
     // Start with Alice's personalized recover.html (share + manifest embedded)
     const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
@@ -680,5 +659,84 @@ test.describe('ZIP Bundle Import', () => {
     await recovery.expectFileCount(3);
     await recovery.expectDownloadVisible();
     await recovery.expectNoLoadingIndicator();
+  });
+
+  test('dropping a bundle ZIP on standalone recover.html extracts manifest from inner recover.html', async ({ page }) => {
+    // Use a truly standalone recover.html (no personalization, no manifest)
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-e2e-standalone-'));
+    const standaloneHtml = generateStandaloneHTML(tmpDir, 'recover');
+    const recovery = new RecoveryPage(page, tmpDir);
+    await recovery.openFile(standaloneHtml);
+
+    // Drop two bundle ZIPs — standard bundles embed the manifest in recover.html
+    // rather than including a separate MANIFEST.age file
+    await recovery.addBundleZip(bundlesDir, 'Alice');
+    await recovery.expectShareCount(1);
+
+    await recovery.addBundleZip(bundlesDir, 'Bob');
+    await recovery.expectShareCount(2);
+
+    // Manifest should be loaded (extracted from recover.html inside the ZIP)
+    await recovery.expectManifestLoaded();
+
+    // Recovery should complete
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(3);
+    await recovery.expectDownloadVisible();
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('manifest replacement via second ZIP does not corrupt recovery', async ({ page }) => {
+    // Use a standalone recover.html (no personalization, no manifest)
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-e2e-manifest-replace-'));
+    const standaloneHtml = generateStandaloneHTML(tmpDir, 'recover');
+    const recovery = new RecoveryPage(page, tmpDir);
+    await recovery.openFile(standaloneHtml);
+
+    // Drop Alice's ZIP — loads share + manifest
+    await recovery.addBundleZip(bundlesDir, 'Alice');
+    await recovery.expectShareCount(1);
+    await recovery.expectManifestLoaded();
+
+    // Drop Bob's ZIP — loads share + replaces manifest
+    await recovery.addBundleZip(bundlesDir, 'Bob');
+    await recovery.expectShareCount(2);
+
+    // Recovery should complete (manifest not corrupted by replacement)
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(3);
+    await recovery.expectDownloadVisible();
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('dropping a personalized recover.html extracts holderShare', async ({ page }) => {
+    const [aliceDir, bobDir] = extractBundles(bundlesDir, ['Alice', 'Bob']);
+    const recovery = new RecoveryPage(page, aliceDir);
+
+    await recovery.open();
+    await recovery.expectShareCount(1);
+
+    // Drop Bob's recover.html — should extract his holderShare from personalization JSON
+    const bobRecoverHtml = path.join(bobDir, 'recover.html');
+    const bobHtmlContent = fs.readFileSync(bobRecoverHtml);
+
+    await page.evaluate(async (htmlBytes: number[]) => {
+      const file = new File([new Uint8Array(htmlBytes)], 'recover.html', {
+        type: 'text/html',
+      });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      const input = document.querySelector('#share-file-input') as HTMLInputElement;
+      if (input) {
+        input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, Array.from(bobHtmlContent));
+
+    // Bob's share should be extracted and added
+    await recovery.expectShareCount(2);
+    await recovery.expectShareHolder('Bob');
   });
 });

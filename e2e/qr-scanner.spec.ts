@@ -48,18 +48,14 @@ test.describe('QR Scanner', () => {
     await expect(page.locator('#scan-qr-btn')).toBeVisible();
   });
 
-  test('scan button is hidden when BarcodeDetector is not available', async ({ page }) => {
+  test('scan button is always visible (polyfill provides BarcodeDetector)', async ({ page }) => {
     const bundleDir = extractBundle(bundlesDir, 'Alice');
-
-    // Ensure BarcodeDetector is NOT defined (default for most test environments)
-    await page.addInitScript(() => {
-      delete (window as any).BarcodeDetector;
-    });
 
     const recovery = new RecoveryPage(page, bundleDir);
     await recovery.open();
 
-    await expect(page.locator('#scan-qr-btn')).not.toBeVisible();
+    // With the zbar-wasm polyfill, BarcodeDetector is always available
+    await expect(page.locator('#scan-qr-btn')).toBeVisible();
   });
 
   test('clicking scan opens modal and close button dismisses it', async ({ page }) => {
@@ -100,8 +96,7 @@ test.describe('QR Scanner', () => {
     await expect(page.locator('#qr-scanner-modal')).not.toBeVisible();
   });
 
-  test('scanning a compact share adds it to the shares list', async ({ page, browserName }) => {
-    test.skip(browserName === 'firefox', 'Firefox canvas.captureStream() does not produce a usable video stream for the mock scanner');
+  test('scanning a compact share adds it to the shares list', async ({ page }) => {
 
     const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
     const recovery = new RecoveryPage(page, aliceDir);
@@ -150,8 +145,7 @@ test.describe('QR Scanner', () => {
     await expect(page.locator('#qr-scanner-modal')).not.toBeVisible();
   });
 
-  test('scanning a URL with fragment adds the share', async ({ page, browserName }) => {
-    test.skip(browserName === 'firefox', 'Firefox canvas.captureStream() does not produce a usable video stream for the mock scanner');
+  test('scanning a URL with fragment adds the share', async ({ page }) => {
 
     const [aliceDir] = extractBundles(bundlesDir, ['Alice']);
     const recovery = new RecoveryPage(page, aliceDir);

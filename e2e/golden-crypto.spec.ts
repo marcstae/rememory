@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getRememoryBin, createTestProject, cleanupProject, extractBundle } from './helpers';
 
 // Load golden fixtures
 const v1Golden = JSON.parse(
@@ -231,5 +232,64 @@ test.describe('Golden Crypto Compatibility', () => {
     if (!result.error) {
       expect(result.matchesExpected).toBe(false);
     }
+  });
+});
+
+test.describe('extractBundle from recover.html', () => {
+  let tmpDir: string;
+  let testHtmlPath: string;
+  let projectDir: string;
+  let bundlesDir: string;
+
+  test.beforeAll(async () => {
+    const bin = getRememoryBin();
+    if (!fs.existsSync(bin)) {
+      test.skip();
+      return;
+    }
+
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-extract-bundle-'));
+    testHtmlPath = createTestHtml(tmpDir);
+    projectDir = createTestProject();
+    bundlesDir = path.join(projectDir, 'output', 'bundles');
+  });
+
+  test.afterAll(async () => {
+    cleanupProject(projectDir);
+    if (tmpDir && fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('extractBundle extracts holderShare from personalized recover.html', async ({ page }) => {
+    const aliceDir = extractBundle(bundlesDir, 'Alice');
+    await page.goto('file://' + testHtmlPath);
+    await page.waitForFunction(() => (window as any).testReady);
+
+    const recoverHtmlContent = fs.readFileSync(
+      path.join(aliceDir, 'recover.html')
+    );
+
+    const result = await page.evaluate(async (htmlBytes: number[]) => {
+      const crypto = (window as any).rememoryCrypto;
+      try {
+        const data = new Uint8Array(htmlBytes);
+        const bundle = await crypto.extractBundle(data);
+
+        return {
+          hasShare: !!bundle.share || !!bundle.holderShare,
+          hasManifest: !!bundle.manifest,
+          shareHolder: bundle.holder,
+          shareIndex: bundle.index,
+        };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    }, Array.from(recoverHtmlContent));
+
+    expect(result.error).toBeUndefined();
+    expect(result.hasShare).toBe(true);
+    expect(result.shareHolder).toBe('Alice');
+    expect(result.shareIndex).toBe(1);
   });
 });

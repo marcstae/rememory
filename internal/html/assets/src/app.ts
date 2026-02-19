@@ -1,5 +1,9 @@
 // ReMemory Recovery Tool - Browser-based recovery using native JavaScript crypto
 
+// BarcodeDetector polyfill - provides QR scanning in browsers without native support
+import { registerPolyfill } from './barcode-detector';
+registerPolyfill();
+
 import type {
   RecoveryState,
   PersonalizationData,
@@ -235,6 +239,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     elements.step2Card = cards[1] as HTMLElement || null;
 
     setupDropZones();
+    setupGlobalDrop();
     setupButtons();
     setupPaste();
     setupScanner();
@@ -381,11 +386,18 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   // ============================================
 
   function setupDropZones(): void {
+    // Both drop zones use the same unified handler - file type is auto-detected
     if (elements.shareDropZone && elements.shareFileInput) {
-      setupDropZone(elements.shareDropZone, elements.shareFileInput, handleShareFiles);
+      setupDropZone(elements.shareDropZone, elements.shareFileInput, handleFilesUnified);
     }
     if (elements.manifestDropZone && elements.manifestFileInput) {
-      setupDropZone(elements.manifestDropZone, elements.manifestFileInput, handleManifestFiles);
+      setupDropZone(elements.manifestDropZone, elements.manifestFileInput, handleFilesUnified);
+    }
+  }
+
+  async function handleFilesUnified(files: FileList | File[]): Promise<void> {
+    for (const file of Array.from(files)) {
+      await handleAnyFile(file);
     }
   }
 
@@ -407,7 +419,9 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation(); // Prevent global handler from also processing
       dropZone.classList.remove('dragover');
+      document.body.classList.remove('drag-active');
       if (e.dataTransfer?.files) {
         handler(e.dataTransfer.files);
       }
@@ -419,6 +433,250 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       target.value = '';
       await handler(files);
     });
+  }
+
+  // ============================================
+  // Global Drop (drop anywhere on page)
+  // ============================================
+
+  function setupGlobalDrop(): void {
+    // Prevent default drag behavior on the whole document
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      document.body.classList.add('drag-active');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+      // Only remove class when leaving the document entirely
+      if (e.relatedTarget === null) {
+        document.body.classList.remove('drag-active');
+      }
+    });
+
+    document.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      document.body.classList.remove('drag-active');
+
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+
+      // Process each file through the unified handler
+      for (const file of Array.from(files)) {
+        await handleAnyFile(file);
+      }
+    });
+  }
+
+  /**
+   * Try to add a parsed share to state. Returns true if added.
+   * When quiet is true, silently skips duplicates instead of showing an error.
+   */
+  async function tryAddShare(shareContent: string, { quiet = false } = {}): Promise<boolean> {
+    const share = await parseShare(shareContent);
+    share.compact = await encodeCompact(share);
+
+    if (state.shares.some(s => s.index === share.index)) {
+      if (!quiet) errorHandlers.duplicateShare(share.index);
+      return false;
+    }
+
+    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+      state.threshold = share.threshold;
+      state.total = share.total;
+    }
+
+    state.shares.push(share);
+    updateSharesUI();
+    return true;
+  }
+
+  function showUnrecognizedFileError(filename: string): void {
+    showError(
+      t('error_unrecognized_file_message', filename),
+      {
+        title: t('error_unrecognized_file_title'),
+        guidance: t('error_unrecognized_file_guidance'),
+      }
+    );
+  }
+
+  /**
+   * Unified file handler - detects file type and processes accordingly.
+   */
+  async function handleAnyFile(file: File): Promise<void> {
+    const name = file.name.toLowerCase();
+
+    try {
+      // ZIP bundle - contains share + manifest
+      if (name.endsWith('.zip') || file.type === 'application/zip') {
+        await handleBundleZipUnified(file);
+        return;
+      }
+
+      // HTML file - may contain share + manifest
+      if (name.endsWith('.html') || name.endsWith('.htm')) {
+        await handleHTMLUnified(file);
+        return;
+      }
+
+      // .age file - manifest only
+      if (name.endsWith('.age')) {
+        const buffer = await readFileAsArrayBuffer(file);
+        state.manifest = new Uint8Array(buffer);
+        showManifestLoaded(file.name, state.manifest.length);
+        highlightSection('manifest');
+        checkRecoverReady();
+        return;
+      }
+
+      // PDF or TXT - try to parse as share
+      if (name.endsWith('.pdf') || name.endsWith('.txt')) {
+        const content = await readFileAsText(file);
+        await parseAndAddShareUnified(content, file.name);
+        return;
+      }
+
+      // Unknown file type - try to parse as share (might be README with different name)
+      const content = await readFileAsText(file);
+      if (shareRegex.test(content)) {
+        await parseAndAddShareUnified(content, file.name);
+      } else {
+        showUnrecognizedFileError(file.name);
+      }
+    } catch (err) {
+      errorHandlers.fileReadFailed(file.name);
+    }
+  }
+
+  /**
+   * Handle ZIP bundle - extract share and manifest, always replace manifest.
+   */
+  async function handleBundleZipUnified(file: File): Promise<void> {
+    const buffer = await readFileAsArrayBuffer(file);
+    const zipData = new Uint8Array(buffer);
+
+    try {
+      const bundle = extractBundle(zipData);
+      let addedShare = false;
+      let addedManifest = false;
+
+      if (bundle.share) {
+        addedShare = await tryAddShare(bundle.share);
+      }
+
+      if (bundle.manifest) {
+        state.manifest = bundle.manifest;
+        showManifestLoaded('MANIFEST.age', state.manifest.length, 'bundle');
+        addedManifest = true;
+      }
+
+      highlightAddedSections(addedShare, addedManifest);
+      checkRecoverReady();
+    } catch {
+      showError(
+        t('error_bundle_extract_message', file.name),
+        {
+          title: t('error_bundle_extract_title'),
+          guidance: t('error_bundle_extract_guidance'),
+        }
+      );
+    }
+  }
+
+  /**
+   * Handle HTML file - extract share and manifest, always replace manifest.
+   */
+  async function handleHTMLUnified(file: File): Promise<void> {
+    const text = await readFileAsText(file);
+
+    const personalizationData = extractPersonalizationFromHTML(text);
+    if (!personalizationData) {
+      showUnrecognizedFileError(file.name);
+      return;
+    }
+
+    try {
+      let addedShare = false;
+      let addedManifest = false;
+      const hasManifest = !!personalizationData.manifestB64;
+
+      if (personalizationData.manifestB64) {
+        const binary = atob(personalizationData.manifestB64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        state.manifest = bytes;
+        showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
+        addedManifest = true;
+      }
+
+      if (personalizationData.holderShare) {
+        try {
+          // Suppress duplicate warning if we got a manifest — the file was still useful
+          addedShare = await tryAddShare(personalizationData.holderShare, { quiet: hasManifest });
+        } catch {
+          // Ignore invalid share
+        }
+      }
+
+      if (!addedShare && !addedManifest) {
+        showUnrecognizedFileError(file.name);
+      } else {
+        highlightAddedSections(addedShare, addedManifest);
+      }
+
+      checkRecoverReady();
+    } catch {
+      showUnrecognizedFileError(file.name);
+    }
+  }
+
+  /**
+   * Parse and add share with section highlighting.
+   */
+  async function parseAndAddShareUnified(content: string, filename: string): Promise<void> {
+    if (!shareRegex.test(content)) {
+      errorHandlers.noShareFound(filename);
+      return;
+    }
+
+    try {
+      const added = await tryAddShare(content);
+      if (added) {
+        highlightSection('share');
+        checkRecoverReady();
+      }
+    } catch (err) {
+      errorHandlers.invalidShare(filename, err instanceof Error ? err.message : undefined);
+    }
+  }
+
+  /**
+   * Briefly highlight a section to show where content was added.
+   */
+  function highlightSection(section: 'share' | 'manifest' | 'both'): void {
+    const highlightDuration = 600;
+
+    if (section === 'share' || section === 'both') {
+      elements.step1Card?.classList.add('highlight-added');
+      setTimeout(() => elements.step1Card?.classList.remove('highlight-added'), highlightDuration);
+    }
+
+    if (section === 'manifest' || section === 'both') {
+      elements.step2Card?.classList.add('highlight-added');
+      setTimeout(() => elements.step2Card?.classList.remove('highlight-added'), highlightDuration);
+    }
+  }
+
+  function highlightAddedSections(addedShare: boolean, addedManifest: boolean): void {
+    if (addedShare && addedManifest) {
+      highlightSection('both');
+    } else if (addedShare) {
+      highlightSection('share');
+    } else if (addedManifest) {
+      highlightSection('manifest');
+    }
   }
 
   // ============================================
@@ -673,163 +931,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   }
 
   // ============================================
-  // Share File Handling
-  // ============================================
-
-  async function handleShareFiles(files: FileList | File[]): Promise<void> {
-    if (elements.shareDropZone) {
-      clearInlineError(elements.shareDropZone);
-    }
-
-    for (const file of Array.from(files)) {
-      try {
-        if (file.name.endsWith('.zip') || file.type === 'application/zip') {
-          await handleBundleZip(file);
-        } else if (file.name.endsWith('.html') || file.name.endsWith('.htm')) {
-          await handleShareFromHTML(file);
-        } else {
-          const content = await readFileAsText(file);
-          await parseAndAddShare(content, file.name);
-        }
-      } catch (_err) {
-        errorHandlers.fileReadFailed(file.name);
-      }
-    }
-  }
-
-  async function handleShareFromHTML(file: File): Promise<void> {
-    const text = await readFileAsText(file);
-
-    const personalizationData = extractPersonalizationFromHTML(text);
-    if (!personalizationData || !personalizationData.holderShare) {
-      showError(
-        t('error_no_share_message', file.name),
-        {
-          title: t('error_no_share_title'),
-          guidance: t('error_html_no_share_guidance'),
-          inline: true,
-          targetElement: elements.shareDropZone || undefined
-        }
-      );
-      return;
-    }
-
-    try {
-      // Parse and add the share
-      const share = await parseShare(personalizationData.holderShare);
-      share.compact = await encodeCompact(share);
-
-      if (state.shares.some(s => s.index === share.index)) {
-        errorHandlers.duplicateShare(share.index);
-        return;
-      }
-
-      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-        state.threshold = share.threshold;
-        state.total = share.total;
-      }
-
-      state.shares.push(share);
-      updateSharesUI();
-
-      // Also extract manifest if present and we don't already have one
-      if (personalizationData.manifestB64 && !state.manifest) {
-        const binary = atob(personalizationData.manifestB64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        state.manifest = bytes;
-        showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
-      }
-
-      checkRecoverReady();
-    } catch (err) {
-      showError(
-        t('error_no_share_message', file.name),
-        {
-          title: t('error_no_share_title'),
-          guidance: err instanceof Error ? err.message : t('error_html_no_share_guidance'),
-          inline: true,
-          targetElement: elements.shareDropZone || undefined
-        }
-      );
-    }
-  }
-
-  async function handleBundleZip(file: File): Promise<void> {
-    const buffer = await readFileAsArrayBuffer(file);
-    const zipData = new Uint8Array(buffer);
-
-    try {
-      const bundle = extractBundle(zipData);
-      if (!bundle.share) {
-        throw new Error('No share found in bundle');
-      }
-      const share = await parseShare(bundle.share);
-      share.compact = await encodeCompact(share);
-
-      if (state.shares.some(s => s.index === share.index)) {
-        errorHandlers.duplicateShare(share.index);
-        return;
-      }
-
-      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-        state.threshold = share.threshold;
-        state.total = share.total;
-      }
-
-      state.shares.push(share);
-      updateSharesUI();
-
-      if (bundle.manifest && !state.manifest) {
-        state.manifest = bundle.manifest;
-        showManifestLoaded('MANIFEST.age', state.manifest.length, 'bundle');
-      }
-
-      checkRecoverReady();
-    } catch (err) {
-      showError(
-        t('error_bundle_extract_message', file.name),
-        {
-          title: t('error_bundle_extract_title'),
-          guidance: err instanceof Error ? err.message : t('error_bundle_extract_guidance'),
-          inline: true,
-          targetElement: elements.shareDropZone || undefined
-        }
-      );
-    }
-  }
-
-  async function parseAndAddShare(content: string, filename: string): Promise<void> {
-    if (!shareRegex.test(content)) {
-      errorHandlers.noShareFound(filename);
-      return;
-    }
-
-    try {
-      const share = await parseShare(content);
-      share.compact = await encodeCompact(share);
-
-      if (state.shares.some(s => s.index === share.index)) {
-        errorHandlers.duplicateShare(share.index);
-        return;
-      }
-
-      if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-        state.threshold = share.threshold;
-        state.total = share.total;
-      }
-
-      state.shares.push(share);
-      updateSharesUI();
-      checkRecoverReady();
-    } catch (err) {
-      errorHandlers.invalidShare(filename, err instanceof Error ? err.message : undefined);
-    }
-  }
-
-  // ============================================
   // Shares UI
   // ============================================
 
@@ -853,8 +954,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
   function updateSharesUI(): void {
     if (!elements.sharesList) return;
-
-    elements.shareDropZone?.classList.toggle('loaded', state.shares.length > 0);
 
     elements.sharesList.innerHTML = '';
 
@@ -918,112 +1017,8 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   }
 
   // ============================================
-  // Manifest Handling
+  // Manifest UI
   // ============================================
-
-  async function handleManifestFiles(files: FileList | File[]): Promise<void> {
-    const fileArray = Array.from(files);
-    if (fileArray.length === 0) return;
-
-    if (elements.manifestDropZone) {
-      clearInlineError(elements.manifestDropZone);
-    }
-
-    try {
-      const file = fileArray[0];
-
-      if (file.name.endsWith('.zip') || file.type === 'application/zip') {
-        await handleBundleZip(file);
-        return;
-      }
-
-      if (file.name.endsWith('.html') || file.name.endsWith('.htm')) {
-        await handleManifestFromHTML(file);
-        return;
-      }
-
-      if (!file.name.endsWith('.age')) {
-        if (elements.manifestDropZone) {
-          showError(
-            t('error_wrong_manifest_message', file.name),
-            {
-              title: t('error_wrong_manifest_title'),
-              guidance: t('error_wrong_manifest_guidance'),
-              inline: true,
-              targetElement: elements.manifestDropZone
-            }
-          );
-        }
-        return;
-      }
-
-      const buffer = await readFileAsArrayBuffer(file);
-      state.manifest = new Uint8Array(buffer);
-
-      showManifestLoaded(file.name, state.manifest.length);
-      checkRecoverReady();
-    } catch (_err) {
-      errorHandlers.fileReadFailed(fileArray[0]?.name || 'file');
-    }
-  }
-
-  async function handleManifestFromHTML(file: File): Promise<void> {
-    const text = await readFileAsText(file);
-
-    const personalizationData = extractPersonalizationFromHTML(text);
-    if (!personalizationData || !personalizationData.manifestB64) {
-      showError(
-        t('error_wrong_manifest_message', file.name),
-        {
-          title: t('error_wrong_manifest_title'),
-          guidance: t('error_html_no_manifest_guidance'),
-          inline: true,
-          targetElement: elements.manifestDropZone || undefined
-        }
-      );
-      return;
-    }
-
-    try {
-      const binary = atob(personalizationData.manifestB64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      state.manifest = bytes;
-      showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
-
-      // Also extract the share if present and we don't already have one
-      if (personalizationData.holderShare) {
-        try {
-          const share = await parseShare(personalizationData.holderShare);
-          share.compact = await encodeCompact(share);
-          if (!state.shares.some(s => s.index === share.index)) {
-            if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-              state.threshold = share.threshold;
-              state.total = share.total;
-            }
-            state.shares.push(share);
-            updateSharesUI();
-          }
-        } catch {
-          // Ignore invalid share in HTML
-        }
-      }
-
-      checkRecoverReady();
-    } catch {
-      showError(
-        t('error_wrong_manifest_message', file.name),
-        {
-          title: t('error_wrong_manifest_title'),
-          guidance: t('error_html_no_manifest_guidance'),
-          inline: true,
-          targetElement: elements.manifestDropZone || undefined
-        }
-      );
-    }
-  }
 
   function showManifestLoaded(filename: string, size: number, source: 'file' | 'bundle' | 'embedded' | 'html' = 'file'): void {
     elements.manifestDropZone?.classList.add('hidden');

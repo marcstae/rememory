@@ -8,6 +8,8 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@undecaf/barcode-detector-polyfill": "^0.9.23",
+    "@undecaf/zbar-wasm": "^0.11.0",
     "age-encryption": "^0.2.0",
     "fflate": "^0.8.2",
     "shamir-secret-sharing": "^0.0.4",

@@ -4,8 +4,18 @@ All notable changes to ReMemory are documented here.
 
 ## Unreleased
 
+## v0.0.13 — 2026-02-18
+
 - **Simpler recovery tool** — The recovery tool (`recover.html`) no longer relies on WebAssembly. It now uses plain JavaScript, making it smaller, faster to load, and more likely to work in browsers for decades to come. The CLI and bundle creation still use Go, but recovery — the part your friends will use — is now built on simpler, more universal technology.
 - **Bigger files, simpler recovery** — Encrypted archives up to 10 MB (up from 5 MB) are now embedded directly in `recover.html`. More people will be able to recover by just opening the HTML file, without needing the separate `MANIFEST.age`.
+- **PDF import in recovery** — PDFs from bundles now contain a machine-readable share appended to the file. You can drop a PDF directly into the recovery tool instead of typing or scanning — it just works.
+- **QR scanning on more browsers** — Added a polyfill for browsers that don't support the BarcodeDetector API, so QR code scanning works in more places.
+- **Tappable email addresses** — Email addresses in the contact list are now `mailto:` links, so you can tap them on a phone instead of copying and pasting. Thanks @vnykmshr!
+- **Accessibility improvements** — Keyboard users can now see where they are when tabbing through the recovery tool (focus indicators). Improved contrast for muted text to meet WCAG AA. Added ARIA attributes for screen readers.
+- **Safer sealing** — Running `seal` on a project where you haven't added any files to the manifest (only the template README) now gives a clear error instead of creating a useless encrypted bundle.
+- **Better drop zones** — Improved the look and behavior of file drop areas in the recovery tool.
+- **Language detection fix** — Regional browser locales (like `en-GB` or `es-MX`) are now detected correctly instead of falling back to English.
+- **Updated Slovenian translations** — Thanks @h200101!
 
 ## v0.0.12 — 2026-02-13
 

@@ -71,6 +71,7 @@ export function extractBundle(data: Uint8Array): BundleContents {
 
   let readmeContent: string | undefined;
   let manifestData: Uint8Array | undefined;
+  let recoverHtmlData: Uint8Array | undefined;
 
   for (const [name, fileData] of Object.entries(files)) {
     const basename = name.split('/').pop() || name;
@@ -86,6 +87,24 @@ export function extractBundle(data: Uint8Array): BundleContents {
 
     if (upperBase === 'MANIFEST.AGE') {
       manifestData = fileData;
+    }
+
+    if (upperBase === 'RECOVER.HTML') {
+      recoverHtmlData = fileData;
+    }
+  }
+
+  // When no separate MANIFEST.age, check recover.html for an embedded manifest
+  if (!manifestData && recoverHtmlData) {
+    const htmlContent = new TextDecoder().decode(recoverHtmlData);
+    const personalization = extractPersonalizationFromHTML(htmlContent);
+    if (personalization?.manifestB64) {
+      const binary = atob(personalization.manifestB64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      manifestData = bytes;
     }
   }
 
