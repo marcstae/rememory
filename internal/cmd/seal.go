@@ -36,7 +36,7 @@ Run this command inside a project directory (created with 'rememory init').`,
 
 func init() {
 	sealCmd.Flags().String("recovery-url", core.DefaultRecoveryURL, "Base URL for QR code in PDF")
-	sealCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 5 MB or less)")
+	sealCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 10 MB or less)")
 	rootCmd.AddCommand(sealCmd)
 }
 

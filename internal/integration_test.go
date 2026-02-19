@@ -1130,8 +1130,8 @@ func TestManifestEmbedding(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping large manifest test in short mode")
 		}
-		// 6MB secret -> encrypted manifest will exceed 5MB threshold
-		bundlesDir, _ := setup(t, 6*1024*1024, false)
+		// 11MB secret -> encrypted manifest will exceed 10MB threshold
+		bundlesDir, _ := setup(t, 11*1024*1024, false)
 		bundlePath := filepath.Join(bundlesDir, "bundle-alice.zip")
 
 		pd := extractPersonalization(t, bundlePath)

@@ -31,7 +31,7 @@ Each bundle contains:
 
 func init() {
 	bundleCmd.Flags().String("recovery-url", core.DefaultRecoveryURL, "Base URL for QR code in PDF")
-	bundleCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 5 MB or less)")
+	bundleCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 10 MB or less)")
 	rootCmd.AddCommand(bundleCmd)
 }
 

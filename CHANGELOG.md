@@ -5,6 +5,7 @@ All notable changes to ReMemory are documented here.
 ## Unreleased
 
 - **Simpler recovery tool** — The recovery tool (`recover.html`) no longer relies on WebAssembly. It now uses plain JavaScript, making it smaller, faster to load, and more likely to work in browsers for decades to come. The CLI and bundle creation still use Go, but recovery — the part your friends will use — is now built on simpler, more universal technology.
+- **Bigger files, simpler recovery** — Encrypted archives up to 10 MB (up from 5 MB) are now embedded directly in `recover.html`. More people will be able to recover by just opening the HTML file, without needing the separate `MANIFEST.age`.
 
 ## v0.0.12 — 2026-02-13
 

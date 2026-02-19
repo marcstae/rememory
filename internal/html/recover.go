@@ -20,7 +20,7 @@ type FriendInfo struct {
 // MaxEmbeddedManifestSize is the maximum size of MANIFEST.age that will be
 // embedded (base64-encoded) in recover.html. Manifests at or below this size
 // are included so recovery can work without the separate MANIFEST.age file.
-const MaxEmbeddedManifestSize = 5 << 20 // 5 MiB
+const MaxEmbeddedManifestSize = 10 << 20 // 10 MiB
 
 // PersonalizationData holds the data to personalize recover.html for a specific friend.
 type PersonalizationData struct {
