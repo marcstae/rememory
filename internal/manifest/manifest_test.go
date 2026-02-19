@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"os"
@@ -37,7 +38,7 @@ func TestArchiveExtract(t *testing.T) {
 
 	// Archive
 	var buf bytes.Buffer
-	archiveResult, err := Archive(&buf, testDir)
+	archiveResult, err := ArchiveTarGz(&buf, testDir)
 	if err != nil {
 		t.Fatalf("archive: %v", err)
 	}
@@ -47,7 +48,7 @@ func TestArchiveExtract(t *testing.T) {
 
 	// Extract to new location
 	dstDir := t.TempDir()
-	extractResult, err := Extract(&buf, dstDir)
+	extractResult, err := ExtractTarGz(&buf, dstDir)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestArchiveNotDirectory(t *testing.T) {
 	defer os.Remove(f.Name())
 
 	var buf bytes.Buffer
-	_, err = Archive(&buf, f.Name())
+	_, err = ArchiveTarGz(&buf, f.Name())
 	if err == nil {
 		t.Error("expected error for non-directory")
 	}
@@ -130,7 +131,7 @@ func TestExtractPathTraversal(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				data := createTarGzBytes(t, map[string]string{tt.entry: "malicious"})
 				destDir := t.TempDir()
-				_, err := Extract(bytes.NewReader(data), destDir)
+				_, err := ExtractTarGz(bytes.NewReader(data), destDir)
 				if err == nil {
 					t.Errorf("expected error for path %q, got nil", tt.entry)
 				}
@@ -152,7 +153,7 @@ func TestExtractPathTraversal(t *testing.T) {
 			"manifest/safe.txt": "safe content",
 		})
 		destDir := t.TempDir()
-		_, err := Extract(bytes.NewReader(data), destDir)
+		_, err := ExtractTarGz(bytes.NewReader(data), destDir)
 		if err != nil {
 			t.Fatalf("unexpected error for safe path: %v", err)
 		}
@@ -175,7 +176,7 @@ func TestExtractPathTraversal(t *testing.T) {
 			"foo/../bar.txt": "resolved content",
 		})
 		destDir := t.TempDir()
-		_, err := Extract(bytes.NewReader(data), destDir)
+		_, err := ExtractTarGz(bytes.NewReader(data), destDir)
 		if err != nil {
 			t.Fatalf("unexpected error for non-escaping dotdot: %v", err)
 		}
@@ -226,7 +227,7 @@ func TestDirSize(t *testing.T) {
 
 func TestArchiveNonexistent(t *testing.T) {
 	var buf bytes.Buffer
-	_, err := Archive(&buf, "/nonexistent/path")
+	_, err := ArchiveTarGz(&buf, "/nonexistent/path")
 	if err == nil {
 		t.Error("expected error for nonexistent directory")
 	}
@@ -235,7 +236,7 @@ func TestArchiveNonexistent(t *testing.T) {
 func TestExtractInvalidGzip(t *testing.T) {
 	// Not valid gzip data
 	data := bytes.NewReader([]byte("not gzip data"))
-	_, err := Extract(data, t.TempDir())
+	_, err := ExtractTarGz(data, t.TempDir())
 	if err == nil {
 		t.Error("expected error for invalid gzip")
 	}
@@ -247,7 +248,7 @@ func TestExtractEmptyArchive(t *testing.T) {
 	gzw := gzip.NewWriter(&buf)
 	gzw.Close()
 
-	_, err := Extract(&buf, t.TempDir())
+	_, err := ExtractTarGz(&buf, t.TempDir())
 	if err == nil {
 		t.Error("expected error for empty archive")
 	}
@@ -289,7 +290,7 @@ func TestArchiveSymlinkWarning(t *testing.T) {
 
 	// Archive should succeed but warn about symlink
 	var buf bytes.Buffer
-	result, err := Archive(&buf, testDir)
+	result, err := ArchiveTarGz(&buf, testDir)
 	if err != nil {
 		t.Fatalf("archive: %v", err)
 	}
@@ -312,7 +313,7 @@ func TestArchiveSymlinkWarning(t *testing.T) {
 
 	// Extract and verify only regular file is present
 	dstDir := t.TempDir()
-	extractResult, err := Extract(&buf, dstDir)
+	extractResult, err := ExtractTarGz(&buf, dstDir)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -334,15 +335,201 @@ func TestArchiveEmptyDir(t *testing.T) {
 	os.MkdirAll(emptyDir, 0755)
 
 	var buf bytes.Buffer
-	_, err := Archive(&buf, emptyDir)
+	_, err := ArchiveTarGz(&buf, emptyDir)
 	if err != nil {
 		t.Fatalf("Archive empty dir: %v", err)
 	}
 
 	// Should still be valid archive
 	dstDir := t.TempDir()
-	_, err = Extract(&buf, dstDir)
+	_, err = ExtractTarGz(&buf, dstDir)
 	if err != nil {
 		t.Fatalf("Extract empty archive: %v", err)
+	}
+}
+
+func TestArchiveZipExtractZip(t *testing.T) {
+	// Create a temp directory with test files
+	srcDir := t.TempDir()
+	testDir := filepath.Join(srcDir, "manifest")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test files
+	files := map[string]string{
+		"README.md":       "# Test Manifest",
+		"secret.txt":      "super secret data",
+		"subdir/file.txt": "nested file content",
+	}
+
+	for path, content := range files {
+		fullPath := filepath.Join(testDir, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Archive as ZIP
+	var buf bytes.Buffer
+	archiveResult, err := ArchiveZip(&buf, testDir)
+	if err != nil {
+		t.Fatalf("archive zip: %v", err)
+	}
+	if len(archiveResult.Warnings) > 0 {
+		t.Logf("archive warnings: %v", archiveResult.Warnings)
+	}
+
+	// Verify it's actually a ZIP (magic bytes)
+	data := buf.Bytes()
+	if len(data) < 2 || data[0] != 0x50 || data[1] != 0x4B {
+		t.Fatal("archive does not start with ZIP magic bytes")
+	}
+
+	// Extract ZIP
+	dstDir := t.TempDir()
+	extractResult, err := ExtractZip(bytes.NewReader(data), int64(len(data)), dstDir)
+	if err != nil {
+		t.Fatalf("extract zip: %v", err)
+	}
+
+	// Verify files
+	for path, expectedContent := range files {
+		fullPath := filepath.Join(extractResult.Path, path)
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			t.Errorf("reading %s: %v", path, err)
+			continue
+		}
+		if string(content) != expectedContent {
+			t.Errorf("%s: got %q, want %q", path, content, expectedContent)
+		}
+	}
+}
+
+// createZipBytes builds a ZIP archive in memory with arbitrary entry names.
+// This allows crafting malicious archives for security testing.
+func createZipBytes(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for name, content := range entries {
+		fw, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("creating zip entry for %q: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(content)); err != nil {
+			t.Fatalf("writing zip content for %q: %v", name, err)
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		t.Fatalf("closing zip writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractZipPathTraversal(t *testing.T) {
+	t.Run("rejected paths", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			entry string
+		}{
+			{"direct traversal", "../escape.txt"},
+			{"relative traversal", "subdir/../../escape.txt"},
+			{"deep traversal", "foo/bar/../../../etc/shadow"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				data := createZipBytes(t, map[string]string{tt.entry: "malicious"})
+				destDir := t.TempDir()
+				_, err := ExtractZip(bytes.NewReader(data), int64(len(data)), destDir)
+				if err == nil {
+					t.Errorf("expected error for path %q, got nil", tt.entry)
+				}
+				if err != nil && !strings.Contains(err.Error(), "invalid path") {
+					t.Errorf("expected 'invalid path' error for %q, got: %v", tt.entry, err)
+				}
+
+				// Verify no files were written outside destDir.
+				entries, _ := os.ReadDir(destDir)
+				if len(entries) > 0 {
+					t.Errorf("expected no files written for traversal path, found %d entries", len(entries))
+				}
+			})
+		}
+	})
+
+	t.Run("accepted safe path", func(t *testing.T) {
+		data := createZipBytes(t, map[string]string{
+			"manifest/safe.txt": "safe content",
+		})
+		destDir := t.TempDir()
+		_, err := ExtractZip(bytes.NewReader(data), int64(len(data)), destDir)
+		if err != nil {
+			t.Fatalf("unexpected error for safe path: %v", err)
+		}
+
+		got, err := os.ReadFile(filepath.Join(destDir, "manifest", "safe.txt"))
+		if err != nil {
+			t.Fatalf("reading extracted file: %v", err)
+		}
+		if string(got) != "safe content" {
+			t.Errorf("got %q, want %q", got, "safe content")
+		}
+	})
+}
+
+func TestExtractAutoZip(t *testing.T) {
+	data := createZipBytes(t, map[string]string{
+		"manifest/test.txt": "zip content",
+	})
+	destDir := t.TempDir()
+	result, err := ExtractAuto(bytes.NewReader(data), destDir)
+	if err != nil {
+		t.Fatalf("ExtractAuto (zip): %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(result.Path, "test.txt"))
+	if err != nil {
+		t.Fatalf("reading extracted file: %v", err)
+	}
+	if string(got) != "zip content" {
+		t.Errorf("got %q, want %q", got, "zip content")
+	}
+}
+
+func TestExtractAutoTarGz(t *testing.T) {
+	data := createTarGzBytes(t, map[string]string{
+		"manifest/test.txt": "targz content",
+	})
+	destDir := t.TempDir()
+	result, err := ExtractAuto(bytes.NewReader(data), destDir)
+	if err != nil {
+		t.Fatalf("ExtractAuto (tar.gz): %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(result.Path, "test.txt"))
+	if err != nil {
+		t.Fatalf("reading extracted file: %v", err)
+	}
+	if string(got) != "targz content" {
+		t.Errorf("got %q, want %q", got, "targz content")
+	}
+}
+
+func TestExtractAutoUnknownFormat(t *testing.T) {
+	data := []byte("not a valid archive format")
+	_, err := ExtractAuto(bytes.NewReader(data), t.TempDir())
+	if err == nil {
+		t.Error("expected error for unknown format")
+	}
+	if !strings.Contains(err.Error(), "unrecognized archive format") {
+		t.Errorf("expected 'unrecognized archive format' error, got: %v", err)
 	}
 }

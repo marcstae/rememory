@@ -121,10 +121,10 @@ func decryptManifest(encryptedData []byte, passphrase string) ([]byte, error) {
 	return core.DecryptBytes(encryptedData, passphrase)
 }
 
-// extractTarGz extracts files from tar.gz data in memory.
-// Uses core.ExtractTarGz for the actual extraction.
-func extractTarGz(tarGzData []byte) ([]core.ExtractedFile, error) {
-	return core.ExtractTarGz(tarGzData)
+// extractArchive extracts files from an archive (ZIP or tar.gz) in memory.
+// Uses core.ExtractArchive for format detection and extraction.
+func extractArchive(archiveData []byte) ([]core.ExtractedFile, error) {
+	return core.ExtractArchive(archiveData)
 }
 
 // decodeShareWords converts 25 BIP39 words to raw share data bytes and share index.

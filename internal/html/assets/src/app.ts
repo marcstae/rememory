@@ -22,7 +22,7 @@ import {
   base64ToBytes,
   bytesToBase64,
   decrypt,
-  extractTarGz,
+  extractArchive,
   extractBundle,
   extractPersonalizationFromHTML,
   decodeShareWords,
@@ -1120,7 +1120,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       state.decryptedArchive = decrypted;
 
       setStatus(t('reading'));
-      const files = await extractTarGz(decrypted);
+      const files = await extractArchive(decrypted);
 
       setProgress(90);
 
@@ -1191,11 +1191,17 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   function downloadAll(): void {
     if (!state.decryptedArchive) return;
 
-    const blob = new Blob([state.decryptedArchive as BlobPart], { type: 'application/gzip' });
+    // Detect archive format from magic bytes
+    const archive = state.decryptedArchive;
+    const isZip = archive.length >= 2 && archive[0] === 0x50 && archive[1] === 0x4B;
+    const mimeType = isZip ? 'application/zip' : 'application/gzip';
+    const fileName = isZip ? 'archive.zip' : 'archive.tar.gz';
+
+    const blob = new Blob([archive as BlobPart], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'manifest.tar.gz';
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
 

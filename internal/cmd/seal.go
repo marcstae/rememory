@@ -118,7 +118,7 @@ func sealProject(p *project.Project, recoveryURL string, noEmbedManifest bool) e
 
 	// Archive the manifest directory
 	var archiveBuf bytes.Buffer
-	archiveResult, err := manifest.Archive(&archiveBuf, manifestDir)
+	archiveResult, err := manifest.ArchiveZip(&archiveBuf, manifestDir)
 	if err != nil {
 		return fmt.Errorf("archiving manifest: %w", err)
 	}

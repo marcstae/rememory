@@ -11,7 +11,7 @@ func main() {
 	js.Global().Set("rememoryParseShare", js.FuncOf(parseShareJS))
 	js.Global().Set("rememoryCombineShares", js.FuncOf(combineSharesJS))
 	js.Global().Set("rememoryDecryptManifest", js.FuncOf(decryptManifestJS))
-	js.Global().Set("rememoryExtractTarGz", js.FuncOf(extractTarGzJS))
+	js.Global().Set("rememoryExtractArchive", js.FuncOf(extractArchiveJS))
 	js.Global().Set("rememoryExtractBundle", js.FuncOf(extractBundleJS))
 	js.Global().Set("rememoryParseCompactShare", js.FuncOf(parseCompactShareJS))
 	js.Global().Set("rememoryDecodeWords", js.FuncOf(decodeWordsJS))

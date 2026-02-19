@@ -2,6 +2,7 @@ package core
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"strings"
@@ -492,6 +493,145 @@ func TestExtractTarGzPathTraversal(t *testing.T) {
 			t.Error("expected error for empty input")
 		}
 	})
+}
+
+// createZipBytes builds a ZIP archive in memory with arbitrary entry names.
+func createZipBytes(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for name, content := range entries {
+		fw, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("creating zip entry for %q: %v", name, err)
+		}
+		if _, err := fw.Write([]byte(content)); err != nil {
+			t.Fatalf("writing zip content for %q: %v", name, err)
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		t.Fatalf("closing zip writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractZip(t *testing.T) {
+	entries := map[string]string{
+		"manifest/file.txt":        "hello",
+		"manifest/nested/deep.txt": "world",
+	}
+	data := createZipBytes(t, entries)
+	files, err := ExtractZip(data)
+	if err != nil {
+		t.Fatalf("ExtractZip: %v", err)
+	}
+
+	extracted := make(map[string]string)
+	for _, f := range files {
+		extracted[f.Name] = string(f.Data)
+	}
+
+	for name, want := range entries {
+		got, ok := extracted[name]
+		if !ok {
+			t.Errorf("missing extracted file %q", name)
+			continue
+		}
+		if got != want {
+			t.Errorf("file %q: got %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestExtractZipPathTraversal(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry string
+	}{
+		{"classic traversal", "../etc/passwd"},
+		{"mid-path traversal", "foo/../../etc/passwd"},
+		{"deep traversal", "foo/bar/../../../etc/shadow"},
+		{"bare dotdot", ".."},
+		{"trailing dotdot", "foo/.."},
+		{"non-escaping dotdot", "foo/../bar"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := createZipBytes(t, map[string]string{tt.entry: "malicious"})
+			_, err := ExtractZip(data)
+			if err == nil {
+				t.Errorf("expected error for path %q, got nil", tt.entry)
+			}
+			if err != nil && !strings.Contains(err.Error(), "invalid path") {
+				t.Errorf("expected 'invalid path' error for %q, got: %v", tt.entry, err)
+			}
+		})
+	}
+}
+
+func TestExtractZipEmpty(t *testing.T) {
+	// ZIP with no files (only directories)
+	data := createZipBytes(t, map[string]string{})
+	_, err := ExtractZip(data)
+	if err == nil {
+		t.Error("expected error for empty zip")
+	}
+}
+
+func TestExtractArchiveZip(t *testing.T) {
+	entries := map[string]string{
+		"manifest/file.txt": "zip content",
+	}
+	data := createZipBytes(t, entries)
+	files, err := ExtractArchive(data)
+	if err != nil {
+		t.Fatalf("ExtractArchive (zip): %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if string(files[0].Data) != "zip content" {
+		t.Errorf("got %q, want %q", files[0].Data, "zip content")
+	}
+}
+
+func TestExtractArchiveTarGz(t *testing.T) {
+	entries := map[string]string{
+		"manifest/file.txt": "targz content",
+	}
+	data := createTarGz(t, entries)
+	files, err := ExtractArchive(data)
+	if err != nil {
+		t.Fatalf("ExtractArchive (tar.gz): %v", err)
+	}
+
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if string(files[0].Data) != "targz content" {
+		t.Errorf("got %q, want %q", files[0].Data, "targz content")
+	}
+}
+
+func TestExtractArchiveUnknown(t *testing.T) {
+	_, err := ExtractArchive([]byte("not a valid archive"))
+	if err == nil {
+		t.Error("expected error for unknown format")
+	}
+	if !strings.Contains(err.Error(), "unrecognized archive format") {
+		t.Errorf("expected 'unrecognized archive format' error, got: %v", err)
+	}
+}
+
+func TestExtractArchiveTooSmall(t *testing.T) {
+	_, err := ExtractArchive([]byte{0x50})
+	if err == nil {
+		t.Error("expected error for too-small input")
+	}
 }
 
 func TestSanitizeFilename(t *testing.T) {

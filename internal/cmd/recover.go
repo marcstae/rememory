@@ -165,8 +165,8 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		outputDir = fmt.Sprintf("recovered-%s", time.Now().Format("2006-01-02"))
 	}
 
-	// Extract archive
-	extractResult, err := manifest.Extract(&decryptedBuf, outputDir)
+	// Extract archive (auto-detects ZIP or tar.gz)
+	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decryptedBuf.Bytes()), outputDir)
 	if err != nil {
 		return fmt.Errorf("extracting manifest: %w", err)
 	}

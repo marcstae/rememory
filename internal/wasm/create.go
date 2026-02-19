@@ -3,10 +3,8 @@
 package main
 
 import (
-	"archive/tar"
 	"archive/zip"
 	"bytes"
-	"compress/gzip"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -162,8 +160,8 @@ func createBundles(config CreateBundlesConfig) ([]BundleOutput, error) {
 		}
 	}
 
-	// Create tar.gz archive of files
-	archiveData, err := createTarGz(config.Files)
+	// Create ZIP archive of files
+	archiveData, err := createZip(config.Files)
 	if err != nil {
 		return nil, fmt.Errorf("creating archive: %w", err)
 	}
@@ -343,24 +341,13 @@ func createBundles(config CreateBundlesConfig) ([]BundleOutput, error) {
 	return bundles, nil
 }
 
-// createTarGz creates a tar.gz archive from file entries.
-func createTarGz(files []FileEntry) ([]byte, error) {
+// createZip creates a ZIP archive from file entries.
+func createZip(files []FileEntry) ([]byte, error) {
 	var buf bytes.Buffer
-	gzw := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gzw)
+	zw := zip.NewWriter(&buf)
 
 	// Use "manifest" as the root directory name
 	rootDir := "manifest"
-
-	// Add root directory entry
-	if err := tw.WriteHeader(&tar.Header{
-		Name:     rootDir + "/",
-		Mode:     0755,
-		Typeflag: tar.TypeDir,
-		ModTime:  time.Now().UTC(),
-	}); err != nil {
-		return nil, fmt.Errorf("writing directory header: %w", err)
-	}
 
 	for _, f := range files {
 		// Normalize the file path - ensure it's under manifest/
@@ -377,28 +364,24 @@ func createTarGz(files []FileEntry) ([]byte, error) {
 		// Add the manifest/ prefix
 		fullPath := rootDir + "/" + name
 
-		header := &tar.Header{
+		header := &zip.FileHeader{
 			Name:     fullPath,
-			Mode:     0644,
-			Size:     int64(len(f.Data)),
-			ModTime:  time.Now().UTC(),
-			Typeflag: tar.TypeReg,
+			Method:   zip.Deflate,
+			Modified: time.Now().UTC(),
 		}
 
-		if err := tw.WriteHeader(header); err != nil {
+		fw, err := zw.CreateHeader(header)
+		if err != nil {
 			return nil, fmt.Errorf("writing header for %s: %w", f.Name, err)
 		}
 
-		if _, err := tw.Write(f.Data); err != nil {
+		if _, err := fw.Write(f.Data); err != nil {
 			return nil, fmt.Errorf("writing data for %s: %w", f.Name, err)
 		}
 	}
 
-	if err := tw.Close(); err != nil {
-		return nil, fmt.Errorf("closing tar: %w", err)
-	}
-	if err := gzw.Close(); err != nil {
-		return nil, fmt.Errorf("closing gzip: %w", err)
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("closing zip: %w", err)
 	}
 
 	return buf.Bytes(), nil

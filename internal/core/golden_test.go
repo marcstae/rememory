@@ -140,8 +140,8 @@ func TestGenerateGoldenFixtures(t *testing.T) {
 		t.Fatalf("parsing created time: %v", err)
 	}
 
-	// Build manifest archive (shared by both v1 and v2)
-	archiveData := createTarGz(t, goldenManifestFiles)
+	// Build manifest archive as ZIP (shared by both v1 and v2)
+	archiveData := createZipBytes(t, goldenManifestFiles)
 
 	// Decode the passphrase to get the raw 32 bytes (v2 splits these directly)
 	rawPassphrase, err := base64.RawURLEncoding.DecodeString(goldenPassphrase)
@@ -518,9 +518,9 @@ func TestGoldenDecrypt(t *testing.T) {
 				t.Fatalf("Decrypt: %v", err)
 			}
 
-			files, err := ExtractTarGz(decrypted.Bytes())
+			files, err := ExtractArchive(decrypted.Bytes())
 			if err != nil {
-				t.Fatalf("ExtractTarGz: %v", err)
+				t.Fatalf("ExtractArchive: %v", err)
 			}
 
 			if len(files) == 0 {

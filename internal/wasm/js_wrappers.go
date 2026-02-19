@@ -90,21 +90,21 @@ func decryptManifestJS(this js.Value, args []js.Value) any {
 	})
 }
 
-// extractTarGzJS extracts files from tar.gz data.
-// Args: tarGzData (Uint8Array)
+// extractArchiveJS extracts files from an archive (ZIP or tar.gz).
+// Args: archiveData (Uint8Array)
 // Returns: { files: [{name: string, data: Uint8Array}], error: string|null }
-func extractTarGzJS(this js.Value, args []js.Value) any {
+func extractArchiveJS(this js.Value, args []js.Value) any {
 	if len(args) < 1 {
-		return errorResult("missing tarGzData argument")
+		return errorResult("missing archiveData argument")
 	}
 
 	// Read Uint8Array from JS
 	jsData := args[0]
 	dataLen := jsData.Get("length").Int()
-	tarGzData := make([]byte, dataLen)
-	js.CopyBytesToGo(tarGzData, jsData)
+	archiveData := make([]byte, dataLen)
+	js.CopyBytesToGo(archiveData, jsData)
 
-	files, err := extractTarGz(tarGzData)
+	files, err := extractArchive(archiveData)
 	if err != nil {
 		return errorResult(err.Error())
 	}

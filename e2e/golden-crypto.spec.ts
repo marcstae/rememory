@@ -91,8 +91,8 @@ test.describe('Golden Crypto Compatibility', () => {
           const manifest = new Uint8Array(manifestBytes);
           const decrypted = await crypto.decrypt(manifest, passphrase);
 
-          // Extract tar.gz
-          const files = await crypto.extractTarGz(decrypted);
+          // Extract archive (auto-detects ZIP or tar.gz)
+          const files = await crypto.extractArchive(decrypted);
 
           const result: Record<string, string> = {};
           for (const file of files) {

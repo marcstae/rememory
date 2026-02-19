@@ -54,7 +54,7 @@ func TestFullWorkflow(t *testing.T) {
 	// Step 2: Seal (simulating 'rememory seal')
 	// Archive manifest
 	var archiveBuf bytes.Buffer
-	if _, err := manifest.Archive(&archiveBuf, p.ManifestPath()); err != nil {
+	if _, err := manifest.ArchiveZip(&archiveBuf, p.ManifestPath()); err != nil {
 		t.Fatalf("archiving: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestFullWorkflow(t *testing.T) {
 
 			// Extract
 			extractDir := t.TempDir()
-			extractResult, err := manifest.Extract(&decryptedBuf, extractDir)
+			extractResult, err := manifest.ExtractAuto(bytes.NewReader(decryptedBuf.Bytes()), extractDir)
 			if err != nil {
 				t.Fatalf("extracting: %v", err)
 			}
@@ -245,7 +245,7 @@ func TestLargeManifest(t *testing.T) {
 
 	// Archive
 	var archiveBuf bytes.Buffer
-	if _, err := manifest.Archive(&archiveBuf, manifestDir); err != nil {
+	if _, err := manifest.ArchiveZip(&archiveBuf, manifestDir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -264,7 +264,7 @@ func TestLargeManifest(t *testing.T) {
 
 	// Extract and verify
 	extractDir := t.TempDir()
-	extractResult, err := manifest.Extract(&decrypted, extractDir)
+	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decrypted.Bytes()), extractDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestBundleGeneration(t *testing.T) {
 
 	// Seal the project
 	var archiveBuf bytes.Buffer
-	if _, err := manifest.Archive(&archiveBuf, p.ManifestPath()); err != nil {
+	if _, err := manifest.ArchiveZip(&archiveBuf, p.ManifestPath()); err != nil {
 		t.Fatalf("archiving: %v", err)
 	}
 
@@ -583,7 +583,7 @@ func TestBundleRecovery(t *testing.T) {
 
 	// Seal
 	var archiveBuf bytes.Buffer
-	if _, err := manifest.Archive(&archiveBuf, p.ManifestPath()); err != nil {
+	if _, err := manifest.ArchiveZip(&archiveBuf, p.ManifestPath()); err != nil {
 		t.Fatalf("archiving: %v", err)
 	}
 
@@ -651,7 +651,7 @@ func TestBundleRecovery(t *testing.T) {
 
 	// Extract
 	extractDir := t.TempDir()
-	extractResult, err := manifest.Extract(&decrypted, extractDir)
+	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decrypted.Bytes()), extractDir)
 	if err != nil {
 		t.Fatalf("extracting: %v", err)
 	}
@@ -755,7 +755,7 @@ func TestAnonymousBundleGeneration(t *testing.T) {
 
 	// Seal the project
 	var archiveBuf bytes.Buffer
-	if _, err := manifest.Archive(&archiveBuf, p.ManifestPath()); err != nil {
+	if _, err := manifest.ArchiveZip(&archiveBuf, p.ManifestPath()); err != nil {
 		t.Fatalf("archiving: %v", err)
 	}
 
@@ -908,7 +908,7 @@ func TestAnonymousBundleRecovery(t *testing.T) {
 
 	// Seal
 	var archiveBuf bytes.Buffer
-	manifest.Archive(&archiveBuf, p.ManifestPath())
+	manifest.ArchiveZip(&archiveBuf, p.ManifestPath())
 	passphrase, _ := crypto.GeneratePassphrase(crypto.DefaultPassphraseBytes)
 
 	os.MkdirAll(p.OutputPath(), 0755)
@@ -970,7 +970,7 @@ func TestAnonymousBundleRecovery(t *testing.T) {
 
 	// Extract and verify
 	extractDir := t.TempDir()
-	extractResult, err := manifest.Extract(&decrypted, extractDir)
+	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decrypted.Bytes()), extractDir)
 	if err != nil {
 		t.Fatalf("extracting: %v", err)
 	}
@@ -1013,7 +1013,7 @@ func TestManifestEmbedding(t *testing.T) {
 		}
 
 		var archiveBuf bytes.Buffer
-		if _, err := manifest.Archive(&archiveBuf, p.ManifestPath()); err != nil {
+		if _, err := manifest.ArchiveZip(&archiveBuf, p.ManifestPath()); err != nil {
 			t.Fatalf("archiving: %v", err)
 		}
 
@@ -1179,4 +1179,58 @@ func TestManifestEmbedding(t *testing.T) {
 			t.Error("MANIFEST.age should be in ZIP when not embedded in recover.html")
 		}
 	})
+}
+
+// TestTarGzBackwardCompatibility verifies that manifests created with the old
+// tar.gz format can still be recovered. This is critical for bundles that may
+// have been created with earlier versions of rememory.
+func TestTarGzBackwardCompatibility(t *testing.T) {
+	// Create a temp directory with test files
+	baseDir := t.TempDir()
+	manifestDir := filepath.Join(baseDir, "manifest")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	secretContent := "backward compat secret"
+	if err := os.WriteFile(filepath.Join(manifestDir, "secret.txt"), []byte(secretContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Archive with the old tar.gz format
+	var archiveBuf bytes.Buffer
+	if _, err := manifest.ArchiveTarGz(&archiveBuf, manifestDir); err != nil {
+		t.Fatalf("archiving (tar.gz): %v", err)
+	}
+
+	// Encrypt
+	passphrase, err := crypto.GeneratePassphrase(crypto.DefaultPassphraseBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encryptedBuf bytes.Buffer
+	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(archiveBuf.Bytes()), passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	// Decrypt
+	var decrypted bytes.Buffer
+	if err := core.Decrypt(&decrypted, bytes.NewReader(encryptedBuf.Bytes()), passphrase); err != nil {
+		t.Fatal(err)
+	}
+
+	// Recover with ExtractAuto — should auto-detect tar.gz
+	extractDir := t.TempDir()
+	result, err := manifest.ExtractAuto(bytes.NewReader(decrypted.Bytes()), extractDir)
+	if err != nil {
+		t.Fatalf("ExtractAuto (tar.gz backward compat): %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(result.Path, "secret.txt"))
+	if err != nil {
+		t.Fatalf("reading extracted file: %v", err)
+	}
+	if string(got) != secretContent {
+		t.Errorf("got %q, want %q", got, secretContent)
+	}
 }
