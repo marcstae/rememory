@@ -249,7 +249,11 @@
       color: var(--text-secondary);
       font-size: 0.95rem;
       line-height: 1.7;
-      margin: 0;
+      margin: 0 0 0.75rem;
+    }
+
+    .background p:last-child {
+      margin-bottom: 0;
     }
 
     footer {
@@ -369,20 +373,29 @@
     <section class="trust">
       <h2>On trust and verification</h2>
       <ul>
+        <li>Recovery works without this project existing — each bundle is self-contained</li>
         <li>The code is open source — <a href="https://github.com/eljojo/rememory" target="_blank">read it on GitHub</a></li>
-        <li>A <a href="https://github.com/eljojo/rememory/blob/main/docs/security-audit.md" target="_blank">self-audit document</a> explains the cryptographic choices</li>
+        <li>A <a href="https://github.com/eljojo/rememory/blob/main/docs/security-review.md" target="_blank">security review</a> explains the cryptographic choices</li>
         <li>Everything runs locally. Your files never leave your device</li>
         <li>Try the demo bundles before using it with real secrets</li>
         <li>Encryption uses <a href="https://github.com/FiloSottile/age" target="_blank">age</a> — a modern, well-regarded tool</li>
+        <li>Read more about <a href="docs.html#cryptography">what protects your data</a> and <a href="docs.html#what-could-go-wrong">what could go wrong</a></li>
       </ul>
     </section>
 
     <section class="background">
       <h2>Why I built this</h2>
       <p>
-        I wanted people I trust to be able to access important files if something happened to me — without
-        giving everything to any one person or service. Shamir's Secret Sharing was the right idea,
-        but I couldn't find a tool that made recovery simple and self-contained. So I built one.
+        Two things led me to build ReMemory.
+      </p>
+      <p>
+        First, I watched <a href="https://www.youtube.com/watch?v=k_P7Y0-wgos" target="_blank">a documentary about Clive Wearing</a>, a man who has lived with severe amnesia since 1985. Seeing how fragile memory can be made me think about what would happen to my digital life if something similar happened to me.
+      </p>
+      <p>
+        Second, I've had several concussions from cycling accidents. Each time, I've been lucky to recover fully — but the reminders add up.
+      </p>
+      <p>
+        ReMemory came out of that: a way to ensure the people I trust can access what matters, even if I can't help them.
       </p>
     </section>
   </div>

@@ -159,7 +159,7 @@ ReMemory does NOT rely on:
 - Any long-term availability of this project
 - The internet during recovery
 
-See the **[Security Audit](docs/security-audit.md)** for details.
+See the **[Security Review](docs/security-review.md)** for details.
 
 </details>
 

@@ -398,18 +398,27 @@
         <h2>Contents</h2>
         <ul>
           <li><a href="#overview">Overview</a></li>
+          <li><a href="#why-rememory">Why ReMemory</a></li>
           <li><a href="#creating">Creating Bundles</a></li>
           <li class="indent"><a href="#step1">Step 1: Add Friends</a></li>
           <li class="indent"><a href="#step2">Step 2: Add Files</a></li>
           <li class="indent"><a href="#step3">Step 3: Generate Bundles</a></li>
           <li class="indent"><a href="#distributing">Distributing</a></li>
+          <li class="indent"><a href="#after-creating">After Creating Bundles</a></li>
           <li><a href="#recovering">Recovering Files</a></li>
           <li class="indent"><a href="#bundle-contents">What Friends Receive</a></li>
           <li class="indent"><a href="#recovery-bundle">Path A: Bundle ZIP</a></li>
           <li class="indent"><a href="#recovery-words">Path B: Printed PDF with Words</a></li>
           <li class="indent"><a href="#recovery-pdf">Path C: Printed PDF with QR</a></li>
           <li><a href="#best-practices">Best Practices</a></li>
+          <li class="indent"><a href="#storing-bundles">Storing Bundles Safely</a></li>
+          <li class="indent"><a href="#keeping-current">Keeping Bundles Current</a></li>
           <li class="indent"><a href="#revoking-access">Revoking Access</a></li>
+          <li class="indent"><a href="#project-file">About project.yml</a></li>
+          <li><a href="#security">Understanding the Security</a></li>
+          <li class="indent"><a href="#cryptography">What Protects Your Data</a></li>
+          <li class="indent"><a href="#what-could-go-wrong">What Could Go Wrong</a></li>
+          <li><a href="#comparison">How It Compares</a></li>
           <li><a href="#cli">CLI Alternative</a></li>
           <li><a href="#anonymous">Anonymous Mode</a></li>
           <li><a href="#multilingual">Multilingual Bundles</a></li>
@@ -443,6 +452,34 @@
       <div class="tip">
         <strong>Tip:</strong> No single person can access your data. They must combine their pieces — enough to reach the threshold you set (e.g., 3 of 5).
       </div>
+    </section>
+
+    <section id="why-rememory" class="doc-section">
+      <h2>Why ReMemory</h2>
+      <p>
+        You probably have digital secrets that matter: password manager recovery codes, cryptocurrency seeds, important documents, instructions for loved ones. What happens to these if you're suddenly unavailable?
+      </p>
+      <p>
+        Think of it like a safe deposit box that needs two keys to open — no single person holds enough to get in alone.
+      </p>
+      <p>
+        Traditional approaches have real weaknesses:
+      </p>
+      <ul>
+        <li><strong>Give one person everything</strong> — a single point of failure and trust</li>
+        <li><strong>Split files manually</strong> — confusing, error-prone, no encryption</li>
+        <li><strong>Use a password manager's emergency access</strong> — similar to "give one person everything", also relies on the company existing</li>
+        <li><strong>Write it in a will</strong> — becomes public record, slow legal process</li>
+      </ul>
+      <p>
+        ReMemory takes a different approach:
+      </p>
+      <ul>
+        <li><strong>No single point of failure</strong> — requires multiple people to cooperate</li>
+        <li><strong>No trust in any one person</strong> — even your most trusted friend can't access your secrets alone</li>
+        <li><strong>Offline and self-contained</strong> — recovery works without internet or servers</li>
+        <li><strong>Designed for anyone</strong> — clear instructions, not cryptographic puzzles</li>
+      </ul>
     </section>
 
     <section id="creating" class="doc-section">
@@ -523,19 +560,25 @@
         <li><strong>Encrypted messaging:</strong> Signal, WhatsApp, etc.</li>
       </ul>
 
-      <div class="tip">
-        <strong>Tell them:</strong>
-        <ol>
-          <li>Keep the bundle somewhere safe — cloud backup, USB drive, a drawer</li>
-          <li>They cannot use it alone; they will need to coordinate with others</li>
-          <li>A single piece reveals nothing, but it should still be kept private</li>
-          <li>Consider printing the <code>README.pdf</code> and keeping it in a safe. Paper survives digital disasters. The <code>MANIFEST.age</code> file can be stored separately since it's just encrypted data.</li>
-        </ol>
-      </div>
+      <h3 id="after-creating">After Creating Bundles</h3>
+      <p>
+        Once your bundles are ready, there are a few things worth doing before you put this out of your mind:
+      </p>
+      <ul>
+        <li>Verify each person received their bundle and can open <code>recover.html</code></li>
+        <li>Tell each person what this is, why they have it, and that they should keep it safe. They cannot use it alone — they will need to coordinate with others.</li>
+        <li>Keep a copy of <code>MANIFEST.age</code> somewhere safe — it's just encrypted data, useless without enough pieces</li>
+        <li>Save your <code>project.yml</code> so you can regenerate bundles later</li>
+        <li>Print <code>README.pdf</code> as a paper backup before sending the digital bundle. Paper doesn't need adapters or power.</li>
+        <li>Set a yearly reminder to check in — see <a href="#keeping-current">Keeping Bundles Current</a></li>
+      </ul>
     </section>
 
     <section id="recovering" class="doc-section">
       <h2>Recovering Files</h2>
+      <p>
+        If you're here because someone you care about is no longer available — take a breath. There's no rush. The bundles don't expire, and the process is designed to be done at your own pace.
+      </p>
 
       <h3 id="bundle-contents">What Friends Receive</h3>
       <p>Each bundle contains:</p>
@@ -738,7 +781,6 @@
         <ul>
           <li>Works entirely offline</li>
           <li>Nothing leaves the browser</li>
-          <li>Runs on Chrome, Firefox, Safari, Edge (camera scanning: Chrome, Edge, Opera)</li>
           <li>Friends can be anywhere — they just need to share their README.txt files</li>
         </ul>
       </div>
@@ -753,7 +795,7 @@
         <li><strong>Geographic spread:</strong> Not all in the same place</li>
         <li><strong>Technical ability:</strong> Any mix is fine — the tool is designed for everyone</li>
         <li><strong>Relationships:</strong> Will they cooperate with each other?</li>
-        <li><strong>Trust:</strong> A single share reveals nothing, but you're trusting them with responsibility</li>
+        <li><strong>Trust:</strong> A single piece reveals nothing, but you're trusting them with responsibility</li>
       </ul>
 
       <h3>Security Considerations</h3>
@@ -763,36 +805,146 @@
         <li>Save <code>project.yml</code> if you want to regenerate bundles later</li>
       </ul>
 
-      <h3>Rotation</h3>
+      <h3 id="storing-bundles">Storing Bundles Safely</h3>
       <p>
-        Consider creating new bundles every few years:
+        Bundles are small (under 10 MB) and designed to be stored in everyday places. Here's what works well:
       </p>
       <ul>
-        <li>Friends' contact info changes</li>
-        <li>You may want to update secrets</li>
-        <li>Relationships change</li>
-        <li>New cryptographic best practices emerge</li>
+        <li><strong>Email</strong> is a surprisingly good option. Most people keep the same email address for decades, and bundles are small enough to attach. Many email providers retain messages indefinitely.</li>
+        <li><strong>Cloud storage</strong> (Google Drive, Dropbox, iCloud) works well as a secondary copy.</li>
+        <li><strong>USB drives</strong> can work, but keep in mind that connectors change over time (USB-A is already giving way to USB-C) and flash memory can degrade if left unpowered for years. Not ideal as the only copy.</li>
+        <li><strong>Paper</strong> is the most durable option. Printing <code>README.pdf</code> gives your friends a copy that doesn't need adapters, power, or any working device.</li>
       </ul>
+      <p>
+        The best approach is redundancy — email plus paper, or cloud plus paper. More than one copy, in more than one form.
+      </p>
+      <h3 id="keeping-current">Keeping Bundles Current</h3>
+      <p>
+        Set a yearly reminder to check in with your friends. Confirm they still have their bundles and update contact details if anything has changed.
+      </p>
+      <p>
+        When your files change, create new bundles and send them. The old bundles won't open the new archive, so there's no risk in leaving them around — but ask friends to replace theirs to keep things tidy.
+      </p>
+      <p>
+        When contacts change — someone moves, changes their phone number, or you want to add or remove someone — same thing: new bundles, ask people to delete the old ones.
+      </p>
+      <p>
+        Between updates, keep your source files in an encrypted vault — tools like <a href="https://cryptomator.org" target="_blank">Cryptomator</a> or <a href="https://veracrypt.fr" target="_blank">VeraCrypt</a> work well. Don't leave plaintext copies sitting in a regular folder.
+      </p>
+      <p>
+        Think of it like updating your emergency contacts. Brief, periodic, worth doing.
+      </p>
 
       <h3 id="revoking-access">Revoking Access</h3>
       <p>
-        Once a share has been distributed, it cannot be revoked. This is by design — there is no server, no central authority.
+        Once a piece has been distributed, it cannot be revoked. This is by design — there is no server, no central authority.
       </p>
       <p>
-        If you need to change who holds shares:
+        If you need to change who holds pieces:
       </p>
       <ol>
-        <li><strong>Create new bundles</strong> with a new set of friends and a fresh passphrase</li>
+        <li><strong>Create new bundles</strong> with a new set of friends and a fresh key</li>
         <li><strong>Send new bundles</strong> to the friends you still trust</li>
         <li><strong>Ask every remaining friend to delete their old bundle</strong> and replace it with the new one</li>
       </ol>
 
       <div class="warning">
-        <strong>Important:</strong> Old shares still work with old archives. When you send a new bundle, be clear: delete the old one, keep only the new one. No version history, no "just in case."
+        <strong>Important:</strong> Old pieces still work with old archives. When you send a new bundle, be clear: delete the old one, keep only the new one. No version history, no "just in case."
       </div>
 
       <p>
-        The same applies when secrets change. New bundles mean a new key and new shares. Old shares won't open the new archive, but they still work with the old one. Make sure friends aren't holding on to old copies.
+        The same applies when secrets change. New bundles mean a new key and new pieces. Old pieces won't open the new archive, but they still work with the old one. Make sure friends aren't holding on to old copies.
+      </p>
+
+      <h3 id="project-file">About project.yml</h3>
+      <p>
+        When you create bundles, your project is saved in a <code>project.yml</code> file. This file stores:
+      </p>
+      <ul>
+        <li>Friends' names and contact information</li>
+        <li>Your chosen threshold (e.g., 3 of 5)</li>
+        <li>A verification hash for checking if bundles match</li>
+        <li>Share checksums for verifying bundle integrity</li>
+      </ul>
+      <p>
+        It does <strong>not</strong> store any secrets — no passphrase, no key material, no file contents. It's safe to keep alongside your other project files.
+      </p>
+      <p>
+        With <code>project.yml</code>, you can regenerate bundles, verify existing ones, and check the status of your setup.
+      </p>
+    </section>
+
+    <section id="security" class="doc-section">
+      <h2>Understanding the Security</h2>
+      <p>
+        ReMemory composes well-established cryptographic tools rather than inventing its own. Here's what that means in practice.
+      </p>
+
+      <h3 id="cryptography">What Protects Your Data</h3>
+      <p>
+        Your files are locked with a modern encryption tool (<a href="https://github.com/FiloSottile/age" target="_blank">age</a>) — widely reviewed, no known weaknesses.
+      </p>
+      <p>
+        The key that locks them is 256 bits long, generated from your operating system's random number generator. For scale: guessing it would take longer than the universe has existed.
+      </p>
+      <p>
+        Even if someone tried every possible password, scrypt makes each guess deliberately slow — millions of times slower than a naive attempt.
+      </p>
+      <p>
+        The key is then split using Shamir's Secret Sharing. <strong>Any fewer than <em>threshold</em> pieces contain zero information about the original.</strong> Not "very little." Mathematically zero.
+      </p>
+      <p>
+        Each bundle includes checksums so the recovery tool can verify nothing was corrupted or tampered with.
+      </p>
+
+      <h3 id="what-could-go-wrong">What Could Go Wrong</h3>
+      <div class="bundle-contents">
+        <div class="file">
+          <span class="file-name">A friend loses their bundle</span>
+          <span class="file-desc">Fine, as long as enough other friends still have theirs. That's why you set the threshold below the total.</span>
+        </div>
+        <div class="file">
+          <span class="file-name">A friend leaks their piece publicly</span>
+          <span class="file-desc">A single piece is useless without the others. Someone would still need threshold-1 more pieces to do anything.</span>
+        </div>
+        <div class="file">
+          <span class="file-name">Some friends can't be reached</span>
+          <span class="file-desc">That's why you set the threshold below the total number of friends. If you chose 3-of-5, any three will do.</span>
+        </div>
+        <div class="file">
+          <span class="file-name">ReMemory disappears in 10 years</span>
+          <span class="file-desc"><code>recover.html</code> still works — it's self-contained. No servers, no downloads, no dependencies on this project.</span>
+        </div>
+        <div class="file">
+          <span class="file-name">Browsers change dramatically</span>
+          <span class="file-desc">The recovery tool uses standard JavaScript and the Web Crypto API — browser fundamentals, not trends.</span>
+        </div>
+        <div class="file">
+          <span class="file-name">You forget how this works</span>
+          <span class="file-desc">Each bundle's README.txt explains everything. Your friends don't need to remember anything — it's all written down for them.</span>
+        </div>
+      </div>
+      <p>
+        The things that <em>do</em> need to be true: your device is trusted when you create bundles, and the browser used for recovery isn't compromised. These are the same assumptions you make any time you use a computer for something important.
+      </p>
+      <p>
+        For a detailed technical evaluation, see the <a href="https://github.com/eljojo/rememory/blob/main/docs/security-review.md" target="_blank">security review</a>.
+      </p>
+    </section>
+
+    <section id="comparison" class="doc-section">
+      <h2>How It Compares</h2>
+      <p>
+        ReMemory isn't the first tool to use Shamir's Secret Sharing. There are many others, from command-line tools to web apps. Here's what sets ReMemory apart:
+      </p>
+      <ul>
+        <li><strong>Handles files, not just text.</strong> Most Shamir tools only split passwords or short text. ReMemory encrypts entire files and folders.</li>
+        <li><strong>Self-contained recovery tool.</strong> Each friend receives <code>recover.html</code> — a complete recovery tool that runs in any browser, offline. No installation, no CLI, no internet needed.</li>
+        <li><strong>Contact details included.</strong> Each bundle includes a list of other friends and how to reach them, so coordination doesn't depend on you being available.</li>
+        <li><strong>No server dependency.</strong> Everything runs locally. There's no service to sign up for, no account to maintain, nothing that needs to stay online.</li>
+      </ul>
+      <p>
+        For a detailed comparison with other tools, see the <a href="https://github.com/eljojo/rememory#other-similar-tools" target="_blank">full comparison table on GitHub</a>.
       </p>
     </section>
 
@@ -807,7 +959,7 @@
       </p>
 
       <p style="margin-top: 1rem;">
-        The CLI provides the same functionality, plus importing contacts from a <code>project.yml</code> file and batch operations.
+        The CLI provides the same functionality, plus batch operations and scripting.
       </p>
     </section>
 
