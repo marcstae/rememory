@@ -107,6 +107,13 @@ test.describe('Time-lock: maker.html advanced options', () => {
 });
 
 test.describe('Time-lock: maker.html bundle creation and recovery with tlock', () => {
+  // This test hits the real drand network — only run under REMEMORY_TEST_TLOCK=1 (make test-tlock)
+  test.beforeAll(() => {
+    if (process.env.REMEMORY_TEST_TLOCK !== '1') {
+      throw new Error('REMEMORY_TEST_TLOCK=1 is required — run these tests via make test-tlock');
+    }
+  });
+
   let makerPath: string;
   let recoverPath: string;
   let tmpDir: string;
@@ -152,10 +159,9 @@ test.describe('Time-lock: maker.html bundle creation and recovery with tlock', (
     // by the time we try to recover.
     await page.evaluate(() => {
       const tlock = (window as any).rememoryTlock;
-      const GENESIS = tlock.QUICKNET_GENESIS;
-      const PERIOD = tlock.QUICKNET_PERIOD;
+      const cfg = (window as any).DRAND_CONFIG;
       const targetUnix = Math.floor(Date.now() / 1000) + 15;
-      const nearFutureRound = Math.ceil((targetUnix - GENESIS) / PERIOD) + 1;
+      const nearFutureRound = Math.ceil((targetUnix - cfg.genesis) / cfg.period) + 1;
       tlock.roundForTime = () => nearFutureRound;
     });
 
@@ -231,13 +237,13 @@ test.describe('Time-lock: maker.html --no-timelock', () => {
     }
   });
 
-  test('advanced options hidden when --no-timelock', async ({ page }) => {
+  test('advanced options absent when --no-timelock', async ({ page }) => {
     const creation = new CreationPage(page, htmlPath);
     await creation.open();
 
-    // Without tlock-js, advanced options should remain hidden
+    // Without tlock-js, advanced options element should not exist at all
     const advancedSection = page.locator('#advanced-options');
-    await expect(advancedSection).toHaveClass(/hidden/);
+    await expect(advancedSection).toHaveCount(0);
   });
 
   test('rememoryTlock is not available on window', async ({ page }) => {
@@ -277,41 +283,26 @@ test.describe('Time-lock: recover.html tlock detection', () => {
     expect(hasTlock).toBe(true);
   });
 
-  test('detects tlock envelope on uploaded manifest', async ({ page }) => {
+  test('plain manifest loads without tlock waiting UI', async ({ page }) => {
     const recovery = new RecoveryPage(page, tmpDir);
     await recovery.openFile(genericRecoverPath);
 
-    // Craft a fake tlock-enveloped manifest: JSON header + dummy ciphertext
-    const futureDate = new Date();
-    futureDate.setFullYear(futureDate.getFullYear() + 1);
-    const meta = {
-      v: 1,
-      rememory: 'v0.0.16',
-      tlock: {
-        v: 1,
-        method: 'drand-quicknet',
-        round: 99999999,
-        unlock: futureDate.toISOString(),
-        chain: '52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971',
-      },
-    };
-    const headerLine = JSON.stringify(meta);
-    const dummyCiphertext = 'age-encryption.org/v1\nfake-ciphertext-data';
-    const fileContent = headerLine + '\n' + dummyCiphertext;
-
-    // Write the crafted manifest to a temp file
+    // Create a dummy MANIFEST.age (just text, not real age — won't decrypt,
+    // but we're only testing that loading it doesn't show tlock waiting UI)
     const manifestPath = path.join(tmpDir, 'MANIFEST.age');
-    fs.writeFileSync(manifestPath, fileContent);
+    fs.writeFileSync(manifestPath, 'age-encryption.org/v1\nfake-ciphertext-data');
 
     // Upload the manifest
     await recovery.addManifestFile(manifestPath);
 
-    // Should detect the tlock envelope and show manifest as loaded (checkmark, no tlock notice)
+    // Should show manifest as loaded
     await recovery.expectManifestLoaded();
-
-    // Manifest card should show normally — tlock info only appears in step 3 waiting panel
     const manifestStatus = page.locator('#manifest-status');
     await expect(manifestStatus).toContainText('MANIFEST.age');
+
+    // Tlock waiting panel should remain hidden (tlock detection is post-decryption now)
+    const tlockWaiting = page.locator('#tlock-waiting');
+    await expect(tlockWaiting).toHaveClass(/hidden/);
   });
 });
 
@@ -339,6 +330,18 @@ test.describe('Time-lock: non-tlock bundles', () => {
     expect(hasTlock).toBe(false);
   });
 
+  test('personalized non-tlock recover.html has no tlock-waiting element', async ({ page }) => {
+    const bundlesDir = path.join(projectDir, 'output', 'bundles');
+    const aliceDir = extractBundle(bundlesDir, 'alice');
+
+    const recovery = new RecoveryPage(page, aliceDir);
+    await recovery.open();
+
+    // The #tlock-waiting element should not exist at all in non-tlock bundles
+    const tlockWaiting = page.locator('#tlock-waiting');
+    await expect(tlockWaiting).toHaveCount(0);
+  });
+
   test('non-tlock recover.html is smaller than generic (no tlock-js overhead)', async ({ page }) => {
     // Get the size of a personalized non-tlock recover.html
     const bundlesDir = path.join(projectDir, 'output', 'bundles');
@@ -358,10 +361,10 @@ test.describe('Time-lock: non-tlock bundles', () => {
       const genericContent = fs.readFileSync(genericPath, 'utf8');
       const personalizedContent = fs.readFileSync(path.join(aliceDir, 'recover.html'), 'utf8');
 
-      // Generic should contain the tlock.js bundle (identifiable by the drand chain hash)
-      expect(genericContent).toContain('QUICKNET_CHAIN_HASH');
-      // Personalized non-tlock should not have the tlock.js bundle
-      expect(personalizedContent).not.toContain('QUICKNET_CHAIN_HASH');
+      // Generic should contain the drand config (injected when tlock is enabled)
+      expect(genericContent).toContain('DRAND_CONFIG');
+      // Personalized non-tlock should not have the drand config
+      expect(personalizedContent).not.toContain('DRAND_CONFIG');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

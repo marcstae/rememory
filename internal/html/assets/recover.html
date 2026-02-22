@@ -103,14 +103,7 @@
     <div class="card">
       <h2><span class="step-number">3</span> <span data-i18n="step3_title">Recover the files</span></h2>
 
-      <div id="tlock-waiting" class="tlock-waiting hidden" aria-live="polite">
-        <div class="tlock-waiting-icon">&#128336;</div>
-        <div class="tlock-waiting-body">
-          <strong id="tlock-waiting-title" data-i18n="tlock_waiting_title">Time lock active</strong>
-          <p id="tlock-waiting-date"></p>
-          <p class="tlock-waiting-hint" data-i18n="tlock_network_message">Opening requires a brief internet connection.</p>
-        </div>
-      </div>
+      {{TLOCK_WAITING_HTML}}
 
       <div id="recover-section" class="recover-section">
         <button id="recover-btn" class="btn btn-primary" disabled>

@@ -78,5 +78,6 @@
   "timelock_months": "mesecev",
   "timelock_years": "let",
   "timelock_preview": "Odpre se po {0}",
+  "timelock_network_hint": "Obnovitev bo potrebovala kratko internetno povezavo za preverjanje časovnega zaklepanja.",
   "timelock_encrypting": "Izvajanje časovnega zaklepanja..."
 }

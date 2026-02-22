@@ -17,7 +17,6 @@ func main() {
 	js.Global().Set("rememoryDecodeWords", js.FuncOf(decodeWordsJS))
 
 	// Register bundle creation functions
-	js.Global().Set("rememoryCreateBundles", js.FuncOf(createBundlesJS))
 	js.Global().Set("rememoryCreateArchive", js.FuncOf(createArchiveJS))
 	js.Global().Set("rememoryCreateBundlesFromArchive", js.FuncOf(createBundlesFromArchiveJS))
 	js.Global().Set("rememoryParseProjectYAML", js.FuncOf(parseProjectYAMLJS))

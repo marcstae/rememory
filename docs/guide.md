@@ -31,7 +31,9 @@ ReMemory helps you:
 2. Split the decryption key among trusted friends using Shamir's Secret Sharing
 3. Create self-contained bundles that friends can use to recover your secrets
 
-The key innovation is that recovery works **entirely offline in a browser**—no servers, no internet, no need for ReMemory to exist when recovery happens.
+The key innovation is that recovery works **entirely offline in a browser**—no servers, no need for ReMemory to exist when recovery happens.*
+
+<sub>* [Time-locked](https://eljojo.github.io/rememory/docs#timelock) archives need a brief internet connection at recovery time.</sub>
 
 ## Installation
 
@@ -318,7 +320,7 @@ HOW TO RECOVER (PRIMARY METHOD - Browser)
 4. Once you have enough shares, the tool will decrypt automatically
 5. Download the recovered files
 
-Works completely offline - no internet required!
+Works completely offline — no internet required.*
 
 --------------------------------------------------------------------------------
 YOUR SHARE
@@ -364,7 +366,7 @@ When your friends need to recover your secrets:
 6. **Download the recovered files**
 
 **Key points:**
-- Works completely offline—no internet required
+- Works completely offline — no internet required*
 - No data leaves the browser
 - Works on Chrome, Firefox, Safari, Edge
 - Friends can be in different locations; they just need to share their README.txt files

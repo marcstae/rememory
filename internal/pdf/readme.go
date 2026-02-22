@@ -33,6 +33,7 @@ type ReadmeData struct {
 	RecoveryURL      string // Base URL for QR code (e.g. "https://example.com/recover.html")
 	Language         string // Bundle language (e.g. "en", "es"); defaults to "en"
 	ManifestEmbedded bool   // true when manifest is embedded in recover.html
+	TlockEnabled     bool   // true when manifest uses time-lock encryption
 }
 
 // Font sizes
@@ -354,7 +355,11 @@ func GenerateReadme(data ReadmeData) ([]byte, error) {
 	}
 	p.Ln(2)
 	p.SetFont(fontSans, "I", bodySize)
-	p.MultiCell(0, 5, t("recover_offline"), "", "L", false)
+	if data.TlockEnabled {
+		p.MultiCell(0, 5, t("recover_offline_tlock"), "", "L", false)
+	} else {
+		p.MultiCell(0, 5, t("recover_offline"), "", "L", false)
+	}
 	p.Ln(5)
 
 	// Section: CLI fallback

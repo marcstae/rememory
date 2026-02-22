@@ -91,6 +91,6 @@
   "tlock_waiting_title": "Časovna zaklep je aktivna",
   "tlock_waiting_message": "Odpre se {0}. Počakajte ali se vrnite kasneje.",
   "tlock_waiting_message_relative": "Odpre se {0}. Počakajte.",
-  "tlock_network_message": "Za odpiranje je potrebna kratka internetna povezava.",
+  "tlock_learn_more": "Kaj je to?",
   "tlock_no_support": "Ta arhiv je časovno zaklenjen. Uporabite recover.html iz svojega svežnja, da ga odprete."
 }

@@ -78,5 +78,6 @@
   "timelock_months": "meses",
   "timelock_years": "anos",
   "timelock_preview": "Abre após {0}",
+  "timelock_network_hint": "A recuperação precisará de uma breve conexão à internet para verificar o bloqueio temporal.",
   "timelock_encrypting": "Aplicando bloqueio temporal..."
 }

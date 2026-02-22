@@ -91,6 +91,6 @@
   "tlock_waiting_title": "時間鎖定中",
   "tlock_waiting_message": "{0} 開放。請稍候，或稍後再來。",
   "tlock_waiting_message_relative": "{0}開放。請稍候。",
-  "tlock_network_message": "開啟需要短暫的網路連線。",
+  "tlock_learn_more": "這是什麼？",
   "tlock_no_support": "此封存檔已被時間鎖定。請使用你復原包中的 recover.html 來開啟。"
 }

@@ -3,7 +3,7 @@
 export { sha256, hashBytes, verifyHash } from './hash';
 export { combine, recoverPassphrase, base64ToBytes, bytesToBase64 } from './shamir';
 export { decrypt } from './age';
-export { extractTarGz, extractArchive, type ExtractedFile } from './archive';
+export { extractTarGz, extractArchive, isTlockContainer, openTlockContainer, type ExtractedFile } from './archive';
 export { parseShare, parseCompactShare, encodeCompact, type ParsedShare } from './share';
 export {
   decodeShareWords,

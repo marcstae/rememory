@@ -39,6 +39,7 @@
   "recover_anon_step4_auto": "4. Ko imate {0} delov skupaj, se obnovitev izvede SAMODEJNO",
   "recover_anon_step5": "5. Prenesite obnovljene datoteke",
   "recover_offline": "Deluje popolnoma brez povezave — internet ni potreben.",
+  "recover_offline_tlock": "Za obnovitev je potrebna kratka internetna povezava.",
   "recover_cli": "KAKO OBNOVITI (NADOMESTNA METODA - Ukazna vrstica)",
   "recover_cli_hint": "Če recover.html ne deluje, prenesite CLI orodje z:",
   "recover_cli_usage": "Uporaba: rememory recover share1.txt share2.txt ... --manifest recover.html",

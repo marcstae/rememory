@@ -1179,61 +1179,37 @@ func TestTlockFullWorkflow(t *testing.T) {
 		t.Fatalf("tlock encrypt: %v", err)
 	}
 
-	// Age-encrypt the tlock ciphertext (outer layer)
+	// Build tlock container (ZIP with tlock.json + manifest.tlock.age)
+	meta := &core.TlockMeta{
+		V:      core.TlockContainerVersion,
+		Method: core.TlockMethodQuicknet,
+		Round:  tlockRound,
+		Unlock: unlockTime.UTC().Format(time.RFC3339),
+		Chain:  core.QuicknetChainHash,
+	}
+	container, err := core.BuildTlockContainer(meta, tlockBuf.Bytes())
+	if err != nil {
+		t.Fatalf("building tlock container: %v", err)
+	}
+
+	// Age-encrypt the container (outer layer)
 	raw, passphrase, err := crypto.GenerateRawPassphrase(crypto.DefaultPassphraseBytes)
 	if err != nil {
 		t.Fatalf("generating passphrase: %v", err)
 	}
 
 	var encryptedBuf bytes.Buffer
-	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(tlockBuf.Bytes()), passphrase); err != nil {
+	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(container), passphrase); err != nil {
 		t.Fatalf("encrypting: %v", err)
 	}
+	manifestData := encryptedBuf.Bytes()
 
-	// Prepend metadata envelope
-	meta := &core.ManifestMeta{
-		V:        core.ManifestMetaVersion,
-		Rememory: "v0.0.0-test",
-		Tlock: &core.TlockMeta{
-			V:      core.TlockMetaVersion,
-			Method: core.TlockMethodQuicknet,
-			Round:  tlockRound,
-			Unlock: unlockTime.UTC().Format(time.RFC3339),
-			Chain:  core.QuicknetChainHash,
-		},
+	// MANIFEST.age should be a plain age file (no JSON envelope)
+	if manifestData[0] != 'a' { // 'a' from "age-encryption.org"
+		t.Error("MANIFEST.age should start with age header, not JSON")
 	}
 
-	var manifestBuf bytes.Buffer
-	if err := core.WriteManifestMeta(&manifestBuf, meta, bytes.NewReader(encryptedBuf.Bytes())); err != nil {
-		t.Fatalf("writing manifest meta: %v", err)
-	}
-	manifestData := manifestBuf.Bytes()
-
-	// Verify MANIFEST.age starts with JSON
-	if !core.HasManifestMeta(manifestData) {
-		t.Fatal("MANIFEST.age should start with JSON envelope")
-	}
-
-	// Parse and verify the envelope
-	parsedMeta, inner, err := core.ParseManifestMeta(manifestData)
-	if err != nil {
-		t.Fatalf("parsing manifest meta: %v", err)
-	}
-
-	if parsedMeta.V != core.ManifestMetaVersion {
-		t.Errorf("meta version: got %d, want %d", parsedMeta.V, core.ManifestMetaVersion)
-	}
-	if parsedMeta.Tlock == nil {
-		t.Fatal("expected tlock metadata")
-	}
-	if parsedMeta.Tlock.Round != tlockRound {
-		t.Errorf("tlock round: got %d, want %d", parsedMeta.Tlock.Round, tlockRound)
-	}
-	if parsedMeta.Tlock.Method != core.TlockMethodQuicknet {
-		t.Errorf("tlock method: got %q, want %q", parsedMeta.Tlock.Method, core.TlockMethodQuicknet)
-	}
-
-	// Recovery: strip envelope → combine shares → age-decrypt → tlock-decrypt → extract
+	// Recovery: combine shares → age-decrypt → detect tlock container → tlock-decrypt → extract
 
 	// Split passphrase
 	shares, err := core.Split(raw, len(friends), threshold)
@@ -1250,13 +1226,31 @@ func TestTlockFullWorkflow(t *testing.T) {
 
 	// Age-decrypt (outer layer)
 	var ageDecrypted bytes.Buffer
-	if err := core.Decrypt(&ageDecrypted, bytes.NewReader(inner), recoveredPass); err != nil {
+	if err := core.Decrypt(&ageDecrypted, bytes.NewReader(manifestData), recoveredPass); err != nil {
 		t.Fatalf("age decrypting: %v", err)
+	}
+
+	// Detect tlock container
+	decryptedData := ageDecrypted.Bytes()
+	if !core.IsTlockContainer(decryptedData) {
+		t.Fatal("expected tlock container after age-decryption")
+	}
+
+	// Open container and verify metadata
+	parsedMeta, tlockCiphertext, err := core.OpenTlockContainer(decryptedData)
+	if err != nil {
+		t.Fatalf("opening tlock container: %v", err)
+	}
+	if parsedMeta.Round != tlockRound {
+		t.Errorf("tlock round: got %d, want %d", parsedMeta.Round, tlockRound)
+	}
+	if parsedMeta.Method != core.TlockMethodQuicknet {
+		t.Errorf("tlock method: got %q, want %q", parsedMeta.Method, core.TlockMethodQuicknet)
 	}
 
 	// Tlock-decrypt (inner layer — the round is in the past, so this should work)
 	var tlockDecrypted bytes.Buffer
-	if err := core.TlockDecrypt(&tlockDecrypted, bytes.NewReader(ageDecrypted.Bytes())); err != nil {
+	if err := core.TlockDecrypt(&tlockDecrypted, bytes.NewReader(tlockCiphertext)); err != nil {
 		t.Fatalf("tlock decrypting: %v", err)
 	}
 
@@ -1277,13 +1271,23 @@ func TestTlockFullWorkflow(t *testing.T) {
 	}
 }
 
-// TestTlockManifestWithoutTlock verifies that regular manifests (no envelope)
-// are correctly identified as non-tlock.
+// TestTlockManifestWithoutTlock verifies that regular archives (no tlock container)
+// are not detected as tlock.
 func TestTlockManifestWithoutTlock(t *testing.T) {
 	// A regular age-encrypted manifest starts with "age-encryption.org"
 	data := []byte("age-encryption.org/v1\n-> scrypt...")
-	if core.HasManifestMeta(data) {
-		t.Error("regular age data should not be detected as having manifest meta")
+	if core.IsTlockContainer(data) {
+		t.Error("regular age data should not be detected as tlock container")
+	}
+
+	// A ZIP that isn't a tlock container (no tlock.json)
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	f, _ := w.Create("hello.txt")
+	f.Write([]byte("world"))
+	w.Close()
+	if core.IsTlockContainer(buf.Bytes()) {
+		t.Error("regular ZIP should not be detected as tlock container")
 	}
 }
 

@@ -39,6 +39,7 @@
   "recover_anon_step4_auto": "4. Once you have {0} shares total, recovery happens AUTOMATICALLY",
   "recover_anon_step5": "5. Download the recovered files",
   "recover_offline": "Works completely offline — no internet required.",
+  "recover_offline_tlock": "Recovery requires a brief internet connection.",
   "recover_cli": "HOW TO RECOVER (FALLBACK - Command Line)",
   "recover_cli_hint": "If recover.html doesn't work, download the CLI tool from:",
   "recover_cli_usage": "Usage: rememory recover share1.txt share2.txt ... --manifest recover.html",

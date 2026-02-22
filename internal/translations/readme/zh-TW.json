@@ -39,6 +39,7 @@
   "recover_anon_step4_auto": "4. 當你收集到 {0} 份金鑰片段，復原程序會自動開始",
   "recover_anon_step5": "5. 下載已復原的檔案",
   "recover_offline": "可完全離線使用，無須網路。",
+  "recover_offline_tlock": "復原時需要短暫的網路連線。",
   "recover_cli": "如何復原（後備方式：命令列）",
   "recover_cli_hint": "如果 recover.html 無法運作，下載命令列工具：",
   "recover_cli_usage": "用法：rememory recover share1.txt share2.txt ... --manifest recover.html",

@@ -39,6 +39,7 @@
   "recover_anon_step4_auto": "4. Assim que tiver {0} partes no total, a recuperação acontece AUTOMATICAMENTE",
   "recover_anon_step5": "5. Baixe os arquivos recuperados",
   "recover_offline": "Isso funciona completamente offline - sem necessidade de internet!",
+  "recover_offline_tlock": "A recuperação necessita de uma breve conexão à internet.",
   "recover_cli": "COMO RECUPERAR (ALTERNATIVA - Linha de Comando)",
   "recover_cli_hint": "Se recover.html não funcionar, baixe a ferramenta CLI de:",
   "recover_cli_usage": "Uso: rememory recover share1.txt share2.txt ... --manifest recover.html",

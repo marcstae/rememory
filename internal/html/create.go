@@ -7,6 +7,40 @@ import (
 	"github.com/eljojo/rememory/internal/translations"
 )
 
+// tlockTabsHTML is the Simple/Advanced tab switcher injected into maker.html step 3.
+const tlockTabsHTML = `<span id="advanced-options" class="mode-tabs hidden">
+          <button type="button" class="mode-tab active" data-mode="simple" data-i18n="mode_simple">Simple</button>
+          <button type="button" class="mode-tab" data-mode="advanced" data-i18n="mode_advanced">Advanced</button>
+        </span>`
+
+// tlockPanelHTML is the time-lock options panel injected into maker.html step 3.
+const tlockPanelHTML = `<!-- Advanced: time lock (shown when Advanced tab is active) -->
+      <div id="timelock-panel" class="hidden" style="margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
+            <input type="checkbox" id="timelock-checkbox">
+            <span data-i18n="timelock_label">Add a time lock</span>
+            <span style="font-size: 0.75rem; color: #8A8480; background: #f0f0ee; padding: 0.125rem 0.5rem; border-radius: 3px;" data-i18n="timelock_experimental">experimental</span>
+          </label>
+          <div id="timelock-options" class="hidden" style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="number" id="timelock-value" min="1" value="30" style="width: 5rem; padding: 0.375rem; border: 1px solid #ddd; border-radius: 4px;">
+            <select id="timelock-unit" style="padding: 0.375rem; border: 1px solid #ddd; border-radius: 4px;">
+              <option value="min" data-i18n="timelock_minutes">minutes</option>
+              <option value="h" data-i18n="timelock_hours">hours</option>
+              <option value="d" selected data-i18n="timelock_days">days</option>
+              <option value="w" data-i18n="timelock_weeks">weeks</option>
+              <option value="m" data-i18n="timelock_months">months</option>
+              <option value="y" data-i18n="timelock_years">years</option>
+            </select>
+          </div>
+        </div>
+        <div id="timelock-details" class="hidden" style="margin-top: 0.5rem;">
+          <p id="timelock-date-preview" style="margin: 0; font-size: 0.875rem; color: #6B6560;"></p>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8125rem; color: #8A8480;"><span data-i18n="timelock_hint">Even with enough pieces, the files stay locked until this date.</span> <a href="{{GITHUB_PAGES}}/docs#timelock" target="_blank" style="color: #7A8FA6;" data-i18n="timelock_learn_more">How does this work?</a></p>
+          <p style="margin: 0.25rem 0 0; font-size: 0.8125rem; color: #8A8480;" data-i18n="timelock_network_hint">Recovery will need a brief internet connection to verify the time lock.</p>
+        </div>
+      </div>`
+
 // GenerateMakerHTML creates the complete maker.html with all assets embedded.
 // createWASMBytes is the create.wasm binary (runs in browser for bundle creation).
 // Note: recover.html uses native JavaScript crypto, not WASM.
@@ -32,14 +66,18 @@ func GenerateMakerHTML(createWASMBytes []byte, version, githubURL string, noTloc
 	// Embed shared.js + create-app.js
 	html = strings.Replace(html, "{{CREATE_APP_JS}}", sharedJS+"\n"+createAppJS, 1)
 
-	// Include tlock.js unless explicitly disabled
+	// Include tlock-create.js and tlock UI unless explicitly disabled
 	if !noTlock {
-		html = strings.Replace(html, "{{TLOCK_JS}}", `<script nonce="{{CSP_NONCE}}">`+tlockJS+`</script>`, 1)
-		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}",
-			"blob: https://api.drand.sh/ https://api2.drand.sh/ https://api3.drand.sh/ https://drand.cloudflare.com/", 1)
+		html = strings.Replace(html, "{{TLOCK_JS}}",
+			drandConfigScript()+`<script nonce="{{CSP_NONCE}}">`+tlockCreateJS+`</script>`, 1)
+		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", drandCSPConnectSrc(), 1)
+		html = strings.Replace(html, "{{TLOCK_TABS_HTML}}", tlockTabsHTML, 1)
+		html = strings.Replace(html, "{{TLOCK_PANEL_HTML}}", tlockPanelHTML, 1)
 	} else {
 		html = strings.Replace(html, "{{TLOCK_JS}}", "", 1)
 		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", "blob:", 1)
+		html = strings.Replace(html, "{{TLOCK_TABS_HTML}}", "", 1)
+		html = strings.Replace(html, "{{TLOCK_PANEL_HTML}}", "", 1)
 	}
 
 	// Embed create.wasm as gzip-compressed base64 (this runs in the browser)

@@ -10,7 +10,6 @@ import type {
   FriendInfo,
   ToastAction,
   TranslationFunction,
-  ManifestMeta,
 } from './types';
 
 // Native crypto imports
@@ -24,6 +23,8 @@ import {
   bytesToBase64,
   decrypt,
   extractArchive,
+  isTlockContainer,
+  openTlockContainer,
   extractBundle,
   extractPersonalizationFromHTML,
   decodeShareWords,
@@ -60,8 +61,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     recovering: false,
     recoveryComplete: false
   };
-
-  let tlockTimer: ReturnType<typeof setInterval> | null = null;
 
   // DOM elements interface
   interface Elements {
@@ -1038,9 +1037,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   function showManifestLoaded(filename: string, size: number, source: 'file' | 'bundle' | 'embedded' | 'html' = 'file'): void {
     elements.manifestDropZone?.classList.add('hidden');
 
-    // Detect tlock envelope on manifest data
-    detectTlockEnvelope();
-
     if (elements.manifestStatus) {
       const sourceLabels: Record<string, string> = {
         file: t('loaded'),
@@ -1065,38 +1061,9 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     }
   }
 
-  function detectTlockEnvelope(): void {
-    if (!state.manifest) return;
-    const tlock = window.rememoryTlock;
-    if (!tlock) {
-      // No tlock-js available — check if this manifest has a tlock header anyway
-      if (state.manifest.length > 0 && state.manifest[0] === 0x7B) {
-        // Try manual parse of the first line
-        const nl = state.manifest.indexOf(0x0A);
-        if (nl > 0) {
-          try {
-            const header = new TextDecoder().decode(state.manifest.slice(0, nl));
-            const meta = JSON.parse(header) as ManifestMeta;
-            if (meta.v && meta.tlock) {
-              state.manifestMeta = meta;
-              state.manifestCiphertext = state.manifest.slice(nl + 1);
-            }
-          } catch { /* not a valid envelope */ }
-        }
-      }
-      return;
-    }
-    const result = tlock.parseManifestMeta(state.manifest);
-    if (result) {
-      state.manifestMeta = result.meta;
-      state.manifestCiphertext = result.ciphertext;
-    }
-  }
-
   function clearManifest(): void {
     state.manifest = null;
-    state.manifestMeta = null;
-    state.manifestCiphertext = null;
+    hideTlockWaiting();
     elements.manifestStatus?.classList.add('hidden');
     elements.manifestStatus?.classList.remove('loaded');
     elements.manifestDropZone?.classList.remove('hidden');
@@ -1113,21 +1080,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   }
 
   function checkRecoverReady(): void {
-    const hasEnoughShares = state.manifest !== null && (
+    const ready = state.manifest !== null && (
       (state.threshold > 0 && state.shares.length >= state.threshold) ||
       (state.threshold === 0 && state.shares.length >= 2)
     );
-
-    // Check if tlock time is in the future
-    const tlockFuture = isTlockInFuture();
-
-    if (tlockFuture && hasEnoughShares) {
-      showTlockWaiting();
-    } else {
-      hideTlockWaiting();
-    }
-
-    const ready = hasEnoughShares && !tlockFuture;
 
     if (elements.recoverBtn) {
       elements.recoverBtn.disabled = !ready;
@@ -1138,51 +1094,25 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     }
   }
 
-  function formatUnlockDate(unlockDate: Date): { text: string; relative: boolean } {
-    const minutesUntil = (unlockDate.getTime() - Date.now()) / 60000;
-    if (minutesUntil > 0 && minutesUntil < 60) {
-      const m = Math.ceil(minutesUntil);
-      return { text: t(m === 1 ? 'tlock_in_one_minute' : 'tlock_in_minutes', m), relative: true };
-    }
-    const hoursUntil = minutesUntil / 60;
-    const text = hoursUntil > 0 && hoursUntil < 24
-      ? unlockDate.toLocaleString()
-      : unlockDate.toLocaleDateString();
-    return { text, relative: false };
-  }
-
-  function isTlockInFuture(): boolean {
-    if (!state.manifestMeta?.tlock) return false;
-    const unlockDate = new Date(state.manifestMeta.tlock.unlock);
-    return unlockDate > new Date();
-  }
-
-  function showTlockWaiting(): void {
+  function showTlockWaiting(unlockDate: Date): void {
     if (!elements.tlockWaiting) return;
-    const tlock = state.manifestMeta?.tlock;
-    if (!tlock) return;
 
-    const unlockDate = new Date(tlock.unlock);
     if (elements.tlockWaitingDate) {
-      const fmt = formatUnlockDate(unlockDate);
+      const fmt = window.rememoryTlock?.formatUnlockDate
+        ? window.rememoryTlock.formatUnlockDate(unlockDate, t)
+        : { text: unlockDate.toLocaleDateString(), relative: false };
       elements.tlockWaitingDate.textContent = fmt.relative
         ? t('tlock_waiting_message_relative', fmt.text)
         : t('tlock_waiting_message', fmt.text);
     }
     elements.tlockWaiting.classList.remove('hidden');
     if (elements.recoverBtn) elements.recoverBtn.classList.add('hidden');
-
-    // Re-check every 5 seconds so recovery auto-starts once time passes
-    if (!tlockTimer) {
-      tlockTimer = setInterval(() => checkRecoverReady(), 5000);
-    }
+    elements.progressBar?.classList.add('hidden');
+    if (elements.statusMessage) elements.statusMessage.textContent = '';
   }
 
   function hideTlockWaiting(): void {
-    if (tlockTimer) {
-      clearInterval(tlockTimer);
-      tlockTimer = null;
-    }
+    window.rememoryTlock?.stopWaiting?.();
     elements.tlockWaiting?.classList.add('hidden');
     if (elements.recoverBtn && !state.recoveryComplete) {
       elements.recoverBtn.classList.remove('hidden');
@@ -1222,84 +1152,117 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
       setProgress(30);
 
-      // Strip envelope if present — use the inner age ciphertext
-      const ageCiphertext = state.manifestMeta
-        ? state.manifestCiphertext!
-        : state.manifest!;
-
-      // age-decrypt (outer layer)
+      // age-decrypt (always a plain age file now)
       setStatus(t('decrypting'));
-      let archive = await decrypt(ageCiphertext, passphrase);
+      let archive = await decrypt(state.manifest!, passphrase);
 
       setProgress(50);
 
-      // If tlock: tlock-decrypt (inner layer)
-      if (state.manifestMeta?.tlock) {
-        if (!window.rememoryTlock) {
-          toast.error(
-            t('tlock_no_support'),
-            t('tlock_no_support'),
-            t('tlock_no_support')
-          );
+      // Check for tlock container (post-decryption)
+      if (isTlockContainer(archive)) {
+        if (!window.rememoryTlock?.decrypt) {
+          toast.error(t('error_title'), t('tlock_no_support'));
           throw new Error('Time-lock decryption not available');
         }
+
+        const { meta, ciphertext } = openTlockContainer(archive);
+        const unlockDate = new Date(meta.unlock);
+
+        if (unlockDate > new Date()) {
+          // Time lock hasn't passed — show waiting UI and start polling
+          showTlockWaiting(unlockDate);
+          window.rememoryTlock.waitAndDecrypt!(
+            meta,
+            ciphertext,
+            (date) => showTlockWaiting(date),
+            async (decryptedArchive) => {
+              hideTlockWaiting();
+              state.recovering = true;
+              elements.progressBar?.classList.remove('hidden');
+              try {
+                setProgress(60);
+                await finishRecovery(decryptedArchive);
+              } catch (err) {
+                handleRecoveryError(err);
+              } finally {
+                state.recovering = false;
+                if (elements.recoverBtn) elements.recoverBtn.disabled = false;
+              }
+            },
+            (err) => {
+              hideTlockWaiting();
+              handleRecoveryError(err);
+            },
+          );
+          state.recovering = false;
+          return;
+        }
+
+        // Time lock passed — decrypt now
         setStatus(t('tlock_decrypting'));
-        archive = await window.rememoryTlock.decrypt(archive);
+        archive = await window.rememoryTlock.decrypt(ciphertext);
       }
 
       setProgress(60);
-
-      state.decryptedArchive = archive;
-
-      setStatus(t('reading'));
-      const files = await extractArchive(archive);
-
-      setProgress(90);
-
-      files.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'file-item';
-        item.innerHTML = `
-          <span class="icon">&#128196;</span>
-          <span class="name">${escapeHtml(file.name)}</span>
-          <span class="size">${formatSize(file.data.length)}</span>
-        `;
-        elements.filesList?.appendChild(item);
-      });
-
-      setProgress(100);
-      setStatus(t('complete', files.length), 'success');
-      elements.downloadActions?.classList.remove('hidden');
-      elements.recoverBtn?.classList.add('hidden');
-      state.recoveryComplete = true;
+      await finishRecovery(archive);
 
     } catch (err) {
-      const errorMsg = (err instanceof Error) ? err.message : String(err);
-
-      if (errorMsg.includes('decrypt') || errorMsg.includes('passphrase') || errorMsg.includes('incorrect')) {
-        errorHandlers.decryptionFailed(err);
-        setStatus(t('error_decrypt_status'), 'error');
-      } else if (errorMsg.includes('extract') || errorMsg.includes('tar') || errorMsg.includes('gzip')) {
-        errorHandlers.extractionFailed(err);
-        setStatus(t('error_extract_status'), 'error');
-      } else {
-        toast.error(
-          t('error_recovery_title'),
-          errorMsg,
-          t('error_recovery_guidance'),
-          [
-            { id: 'retry', label: t('action_try_again'), primary: true, onClick: () => startRecovery() }
-          ]
-        );
-        setStatus(t('error', errorMsg), 'error');
-      }
-
-      elements.step1Card?.classList.remove('collapsed');
-      elements.step2Card?.classList.remove('collapsed');
+      handleRecoveryError(err);
     } finally {
       state.recovering = false;
       if (elements.recoverBtn) elements.recoverBtn.disabled = false;
     }
+  }
+
+  async function finishRecovery(archive: Uint8Array): Promise<void> {
+    state.decryptedArchive = archive;
+
+    setStatus(t('reading'));
+    const files = await extractArchive(archive);
+
+    setProgress(90);
+
+    files.forEach(file => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `
+        <span class="icon">&#128196;</span>
+        <span class="name">${escapeHtml(file.name)}</span>
+        <span class="size">${formatSize(file.data.length)}</span>
+      `;
+      elements.filesList?.appendChild(item);
+    });
+
+    setProgress(100);
+    setStatus(t('complete', files.length), 'success');
+    elements.downloadActions?.classList.remove('hidden');
+    elements.recoverBtn?.classList.add('hidden');
+    state.recoveryComplete = true;
+  }
+
+  function handleRecoveryError(err: unknown): void {
+    const errorMsg = (err instanceof Error) ? err.message : String(err);
+
+    if (errorMsg.includes('decrypt') || errorMsg.includes('passphrase') || errorMsg.includes('incorrect')) {
+      errorHandlers.decryptionFailed(err);
+      setStatus(t('error_decrypt_status'), 'error');
+    } else if (errorMsg.includes('extract') || errorMsg.includes('tar') || errorMsg.includes('gzip')) {
+      errorHandlers.extractionFailed(err);
+      setStatus(t('error_extract_status'), 'error');
+    } else {
+      toast.error(
+        t('error_recovery_title'),
+        errorMsg,
+        t('error_recovery_guidance'),
+        [
+          { id: 'retry', label: t('action_try_again'), primary: true, onClick: () => startRecovery() }
+        ]
+      );
+      setStatus(t('error', errorMsg), 'error');
+    }
+
+    elements.step1Card?.classList.remove('collapsed');
+    elements.step2Card?.classList.remove('collapsed');
   }
 
   function setProgress(percent: number): void {

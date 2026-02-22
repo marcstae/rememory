@@ -165,6 +165,17 @@ func TestParseTimelockValue(t *testing.T) {
 			},
 		},
 		{
+			name:  "5 minutes",
+			input: "5min",
+			check: func(t *testing.T, result time.Time) {
+				expected := time.Now().UTC().Add(5 * time.Minute)
+				diff := result.Sub(expected)
+				if diff < -time.Second || diff > time.Second {
+					t.Errorf("5min: expected ~%v, got %v", expected, result)
+				}
+			},
+		},
+		{
 			name:  "uppercase D",
 			input: "30D",
 			check: func(t *testing.T, result time.Time) {

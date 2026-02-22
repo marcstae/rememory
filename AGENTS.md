@@ -124,7 +124,7 @@ These must not regress. Reference them in reviews.
 ```bash
 make build          # Compile TypeScript, build create.wasm, then build CLI binary
 make test           # Run all Go tests (go test -v ./...)
-make test-tlock     # Run tlock integration tests (requires internet; drand network access)
+make test-tlock     # Run ALL drand-dependent tests: Go integration + Playwright E2E (requires internet)
 make lint           # Run go vet + gofmt check
 make test-e2e       # Run Playwright browser tests (requires: npm install, npx playwright install)
 make html           # Generate static site into dist/ (index.html, maker.html, docs.html, recover.html)
@@ -172,7 +172,7 @@ When `MANIFEST.age` is 10 MB or less, it is also base64-encoded and embedded in 
 
 ### Key packages
 
-- `internal/core/` — Cryptographic primitives: Shamir split/combine, age encrypt/decrypt, tlock time-lock encrypt/decrypt, manifest metadata envelope, share encoding (PEM-like `BEGIN REMEMORY SHARE` format), tar.gz archive
+- `internal/core/` — Cryptographic primitives: Shamir split/combine, age encrypt/decrypt, tlock time-lock encrypt/decrypt, tlock container (ZIP with metadata + ciphertext), share encoding (PEM-like `BEGIN REMEMORY SHARE` format), tar.gz archive
 - `internal/project/` — Project config (`project.yml`), friend definitions, template rendering
 - `internal/manifest/` — Archive/extract the manifest directory
 - `internal/cmd/` — Cobra CLI commands (init, seal, bundle, recover, verify, demo, html, status, doc)

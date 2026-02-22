@@ -3,24 +3,37 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
+	"filippo.io/age/armor"
 	"github.com/drand/tlock"
 	tlockhttp "github.com/drand/tlock/networks/http"
 )
 
+// IsTlockTooEarly returns true if the error wraps tlock.ErrTooEarly,
+// meaning the drand round has not been reached yet.
+func IsTlockTooEarly(err error) bool {
+	return errors.Is(err, tlock.ErrTooEarly)
+}
+
 // TlockEncrypt encrypts src to a specific drand round number using tlock.
-// The ciphertext can only be decrypted after the drand beacon for that round
-// is emitted. A network connection is required to fetch the chain public key.
+// The output is ASCII-armored age format for compatibility with tlock-js
+// (which expects armored input in timelockDecrypt). The Go TlockDecrypt
+// handles both armored and binary age format, so this is safe.
 func TlockEncrypt(dst io.Writer, src io.Reader, roundNumber uint64) error {
 	network, err := connectDrand()
 	if err != nil {
 		return fmt.Errorf("tlock encrypt: %w", err)
 	}
 
-	if err := tlock.New(network).Encrypt(dst, src, roundNumber); err != nil {
+	aw := armor.NewWriter(dst)
+	if err := tlock.New(network).Encrypt(aw, src, roundNumber); err != nil {
 		return fmt.Errorf("tlock encrypt: %w", err)
+	}
+	if err := aw.Close(); err != nil {
+		return fmt.Errorf("tlock encrypt (armor): %w", err)
 	}
 
 	return nil

@@ -31,6 +31,7 @@ Example:
 }
 
 func init() {
+	demoCmd.Flags().String("timelock", "", "Time-lock duration or date (e.g., 5min, 30d, 1y, 2027-06-15T00:00:00Z)")
 	rootCmd.AddCommand(demoCmd)
 }
 
@@ -117,7 +118,9 @@ Note: In a real project, these would be your actual sensitive credentials.
 	fmt.Printf("  %s manifest/passwords.txt\n", green("✓"))
 	fmt.Println()
 
-	if err := sealProject(p, "", false, ""); err != nil {
+	timelockStr, _ := cmd.Flags().GetString("timelock")
+
+	if err := sealProject(p, "", false, timelockStr); err != nil {
 		return err
 	}
 

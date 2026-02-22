@@ -124,6 +124,7 @@ func GenerateAll(p *project.Project, cfg Config) error {
 			Anonymous:        p.Anonymous,
 			RecoveryURL:      cfg.RecoveryURL,
 			Language:         lang,
+			TlockEnabled:     cfg.TlockEnabled,
 		})
 		if err != nil {
 			return fmt.Errorf("generating bundle for %s: %w", friend.Name, err)
@@ -158,6 +159,7 @@ type BundleParams struct {
 	Anonymous        bool
 	RecoveryURL      string
 	Language         string // Bundle language for this friend
+	TlockEnabled     bool   // true when manifest uses time-lock encryption
 }
 
 // GenerateBundle creates a single bundle ZIP file for one friend.
@@ -178,6 +180,7 @@ func GenerateBundle(params BundleParams) error {
 		Anonymous:        params.Anonymous,
 		Language:         params.Language,
 		ManifestEmbedded: params.ManifestEmbedded,
+		TlockEnabled:     params.TlockEnabled,
 	}
 
 	// Generate README.txt
@@ -200,6 +203,7 @@ func GenerateBundle(params BundleParams) error {
 		RecoveryURL:      params.RecoveryURL,
 		Language:         params.Language,
 		ManifestEmbedded: params.ManifestEmbedded,
+		TlockEnabled:     params.TlockEnabled,
 	})
 	if err != nil {
 		return fmt.Errorf("generating PDF: %w", err)

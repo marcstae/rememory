@@ -14,6 +14,7 @@ const (
 	QuicknetChainHash = "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"
 	QuicknetPeriod    = 3 * time.Second
 	QuicknetGenesis   = 1692803367 // Unix timestamp: 2023-08-23T11:22:47Z
+	QuicknetPublicKey = "83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a"
 
 	TlockMethodQuicknet = "drand-quicknet"
 )
@@ -49,17 +50,19 @@ func TimeForRound(round uint64) time.Time {
 	return genesis.Add(offset)
 }
 
-// durationPattern matches relative duration strings like "30d", "6m", "1y", "2w".
-var durationPattern = regexp.MustCompile(`^(\d+)\s*([dwmy])$`)
+// durationPattern matches relative duration strings like "30d", "6m", "1y", "2w", "5min", "2h".
+var durationPattern = regexp.MustCompile(`^(\d+)\s*(min|[hdwmy])$`)
 
 // ParseTimelockValue parses a human-readable timelock duration or an absolute
 // ISO 8601 datetime string, returning the target unlock time.
 //
 // Supported formats:
-//   - "30d" — 30 days from now
-//   - "2w"  — 2 weeks from now
-//   - "6m"  — 6 months from now
-//   - "1y"  — 1 year from now
+//   - "5min" — 5 minutes from now
+//   - "2h"   — 2 hours from now
+//   - "30d"  — 30 days from now
+//   - "2w"   — 2 weeks from now
+//   - "6m"   — 6 months from now
+//   - "1y"   — 1 year from now
 //   - "2027-06-15T00:00:00Z" — absolute RFC 3339 datetime
 func ParseTimelockValue(input string) (time.Time, error) {
 	input = strings.TrimSpace(input)
@@ -80,6 +83,10 @@ func ParseTimelockValue(input string) (time.Time, error) {
 
 		now := time.Now().UTC()
 		switch matches[2] {
+		case "min":
+			return now.Add(time.Duration(n) * time.Minute), nil
+		case "h":
+			return now.Add(time.Duration(n) * time.Hour), nil
 		case "d":
 			return now.AddDate(0, 0, n), nil
 		case "w":
@@ -94,7 +101,7 @@ func ParseTimelockValue(input string) (time.Time, error) {
 	// Try absolute datetime (RFC 3339)
 	t, err := time.Parse(time.RFC3339, input)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("invalid timelock value %q: expected duration (30d, 2w, 6m, 1y) or RFC 3339 datetime", input)
+		return time.Time{}, fmt.Errorf("invalid timelock value %q: expected duration (5min, 2h, 30d, 2w, 6m, 1y) or RFC 3339 datetime", input)
 	}
 
 	if t.Before(time.Now()) {
@@ -102,9 +109,4 @@ func ParseTimelockValue(input string) (time.Time, error) {
 	}
 
 	return t.UTC(), nil
-}
-
-// IsTlockTooEarly returns true if the error is a tlock "too early" error.
-func IsTlockTooEarly(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "too early")
 }

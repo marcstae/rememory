@@ -2,7 +2,9 @@
 
 **Encrypt your files and split the key among people you trust.**
 
-ReMemory splits a decryption key using Shamir's Secret Sharing and gives each person a self-contained tool to recover the files together — offline, in any browser.
+ReMemory splits a decryption key using Shamir's Secret Sharing and gives each person a self-contained tool to recover the files together — offline, in any browser.*
+
+<sub>* [Time-locked](#time-delayed-recovery-experimental) archives need a brief internet connection at recovery time.</sub>
 
 ## Recovery works without this project
 
@@ -130,7 +132,7 @@ Traditional approaches fail:
 ReMemory takes a different approach:
 - **No single point of failure** — requires multiple people to cooperate
 - **No trust in any one person** — even your most trusted friend can't access secrets alone
-- **Offline and self-contained** — recovery works without internet or servers
+- **Offline and self-contained** — recovery works without internet or servers*
 - **Designed for non-technical people** — clear instructions, not cryptographic puzzles
 
 </details>

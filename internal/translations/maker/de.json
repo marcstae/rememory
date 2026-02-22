@@ -78,5 +78,6 @@
   "timelock_months": "Monate",
   "timelock_years": "Jahre",
   "timelock_preview": "Öffnet nach dem {0}",
+  "timelock_network_hint": "Zur Wiederherstellung wird eine kurze Internetverbindung benötigt, um die Zeitsperre zu prüfen.",
   "timelock_encrypting": "Zeitsperre wird angewendet..."
 }

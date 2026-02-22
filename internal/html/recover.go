@@ -37,6 +37,58 @@ type PersonalizationData struct {
 	TlockEnabled bool         `json:"tlockEnabled,omitempty"` // Signals tlock-js should be included
 }
 
+// tlockWaitingHTML is the time-lock waiting UI injected into recover.html.
+// Includes inline CSS so the styles are zero-trace when tlock is disabled.
+const tlockWaitingHTML = `<style>
+.tlock-waiting {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--sage-tint);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+.tlock-waiting-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tlock-waiting-body {
+  flex: 1;
+}
+.tlock-waiting-body strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+.tlock-waiting-body p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.tlock-waiting-hint {
+  color: var(--text-muted) !important;
+  font-size: 0.8125rem !important;
+}
+.tlock-waiting-hint a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.tlock-waiting-hint a:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+</style>
+      <div id="tlock-waiting" class="tlock-waiting hidden" aria-live="polite">
+        <div class="tlock-waiting-icon">&#128336;</div>
+        <div class="tlock-waiting-body">
+          <strong id="tlock-waiting-title" data-i18n="tlock_waiting_title">Time lock active</strong>
+          <p id="tlock-waiting-date"></p>
+          <p class="tlock-waiting-hint"><a href="{{GITHUB_PAGES}}/docs#timelock" target="_blank" data-i18n="tlock_learn_more">What is this?</a></p>
+        </div>
+      </div>`
+
 // RecoverHTMLOptions holds optional parameters for GenerateRecoverHTML.
 type RecoverHTMLOptions struct {
 	NoTlock bool // Omit tlock-js even from generic recover.html
@@ -83,12 +135,14 @@ func GenerateRecoverHTML(version, githubURL string, personalization *Personaliza
 	}
 	includeTlock := !noTlock && (personalization == nil || personalization.TlockEnabled)
 	if includeTlock {
-		html = strings.Replace(html, "{{TLOCK_JS}}", `<script nonce="{{CSP_NONCE}}">`+tlockJS+`</script>`, 1)
-		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}",
-			"blob: https://api.drand.sh/ https://api2.drand.sh/ https://api3.drand.sh/ https://drand.cloudflare.com/", 1)
+		html = strings.Replace(html, "{{TLOCK_JS}}",
+			drandConfigScript()+`<script nonce="{{CSP_NONCE}}">`+tlockRecoverJS+`</script>`, 1)
+		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", drandCSPConnectSrc(), 1)
+		html = strings.Replace(html, "{{TLOCK_WAITING_HTML}}", tlockWaitingHTML, 1)
 	} else {
 		html = strings.Replace(html, "{{TLOCK_JS}}", "", 1)
 		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", "blob:", 1)
+		html = strings.Replace(html, "{{TLOCK_WAITING_HTML}}", "", 1)
 	}
 
 	// Replace version and GitHub URLs

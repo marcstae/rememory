@@ -91,6 +91,6 @@
   "tlock_waiting_title": "Zeitsperre aktiv",
   "tlock_waiting_message": "Öffnet am {0}. Einfach warten oder später wiederkommen.",
   "tlock_waiting_message_relative": "Öffnet {0}. Einfach warten.",
-  "tlock_network_message": "Zum Öffnen wird kurz eine Internetverbindung benötigt.",
+  "tlock_learn_more": "Was ist das?",
   "tlock_no_support": "Dieses Archiv ist zeitgesperrt. Verwende die recover.html aus deinem Paket, um es zu öffnen."
 }

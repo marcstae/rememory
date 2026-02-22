@@ -91,6 +91,6 @@
   "tlock_waiting_title": "Bloqueo temporal activo",
   "tlock_waiting_message": "Se abre el {0}. Espera, o vuelve después.",
   "tlock_waiting_message_relative": "Se abre {0}. Solo espera.",
-  "tlock_network_message": "Para abrir se necesita una breve conexión a internet.",
+  "tlock_learn_more": "¿Qué es esto?",
   "tlock_no_support": "Este archivo tiene un bloqueo temporal. Usa el recover.html de tu kit para abrirlo."
 }

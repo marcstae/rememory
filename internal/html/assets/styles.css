@@ -302,43 +302,6 @@ input[type="file"] {
   background: var(--sage-dark);
 }
 
-.tlock-waiting {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  background: var(--sage-tint);
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-
-.tlock-waiting-icon {
-  font-size: 1.75rem;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.tlock-waiting-body {
-  flex: 1;
-}
-
-.tlock-waiting-body strong {
-  display: block;
-  color: var(--text);
-  margin-bottom: 0.25rem;
-}
-
-.tlock-waiting-body p {
-  margin: 0.25rem 0 0;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.tlock-waiting-hint {
-  color: var(--text-muted) !important;
-  font-size: 0.8125rem !important;
-}
-
 .recover-section {
   text-align: center;
 }

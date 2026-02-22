@@ -5,7 +5,6 @@ import type {
   BundleFile,
   GeneratedBundle,
   TranslationFunction,
-  BundleFromArchiveConfig
 } from './types';
 
 // Translation function and language state (defined in HTML)
@@ -684,28 +683,10 @@ declare let currentLang: string;
         if (datePreview) datePreview.textContent = '';
         return;
       }
-      const target = computeTimelockDate();
+      const target = window.rememoryTlock?.computeTimelockDate?.(state.tlockValue, state.tlockUnit);
       if (target) {
-        const formatted = (state.tlockUnit === 'min' || state.tlockUnit === 'h')
-          ? target.toLocaleString()
-          : target.toLocaleDateString();
-        datePreview.textContent = t('timelock_preview', formatted);
+        datePreview.textContent = t('timelock_preview', window.rememoryTlock!.formatTimelockDate(target));
       }
-    }
-  }
-
-  function computeTimelockDate(): Date | null {
-    const now = new Date();
-    const v = state.tlockValue;
-    if (v <= 0) return null;
-    switch (state.tlockUnit) {
-      case 'min': return new Date(now.getTime() + v * 60000);
-      case 'h': return new Date(now.getTime() + v * 3600000);
-      case 'd': return new Date(now.getTime() + v * 86400000);
-      case 'w': return new Date(now.getTime() + v * 7 * 86400000);
-      case 'm': { const d = new Date(now); d.setMonth(d.getMonth() + v); return d; }
-      case 'y': { const d = new Date(now); d.setFullYear(d.getFullYear() + v); return d; }
-      default: return null;
     }
   }
 
@@ -848,79 +829,55 @@ declare let currentLang: string;
         }));
       }
 
-      let result: { error?: string; bundles?: GeneratedBundle[] };
+      // Step 1: Create archive
+      setProgress(10);
+      setStatus(t('archiving'));
+      await sleep(100);
+
+      const archiveResult = window.rememoryCreateArchive(filesForWasm);
+      if (archiveResult.error || !archiveResult.data) {
+        throw new Error(archiveResult.error || 'Failed to create archive');
+      }
+
+      // Step 2: Optionally tlock-encrypt
+      let archiveData = archiveResult.data;
+      let tlockRound: number | undefined;
+      let tlockUnlock: string | undefined;
 
       if (state.tlockEnabled && window.rememoryTlock) {
-        // Tlock path: archive → tlock-encrypt (JS) → age-encrypt + bundle (WASM)
-        setProgress(10);
-        setStatus(t('archiving'));
-        await sleep(100);
-
-        const archiveResult = window.rememoryCreateArchive(filesForWasm);
-        if (archiveResult.error || !archiveResult.data) {
-          throw new Error(archiveResult.error || 'Failed to create archive');
-        }
-
         setProgress(25);
         setStatus(t('timelock_encrypting'));
         await sleep(100);
 
-        const targetDate = computeTimelockDate();
+        const targetDate = window.rememoryTlock.computeTimelockDate!(state.tlockValue, state.tlockUnit);
         if (!targetDate) throw new Error('Invalid time lock date');
-        const round = window.rememoryTlock.roundForTime(targetDate);
-        const tlockCiphertext = await window.rememoryTlock.encrypt(archiveResult.data, round);
-        const unlockDate = window.rememoryTlock.timeForRound(round);
-
-        setProgress(50);
-        setStatus(t('encrypting'));
-        await sleep(100);
-
-        const archiveConfig: BundleFromArchiveConfig = {
-          projectName: state.projectName,
-          threshold: state.threshold,
-          friends: friends,
-          archiveData: tlockCiphertext,
-          version: window.VERSION || 'dev',
-          githubURL: window.GITHUB_URL || 'https://github.com/eljojo/rememory',
-          anonymous: state.anonymous,
-          defaultLanguage: currentLang || 'en',
-          tlockRound: round,
-          tlockUnlock: unlockDate.toISOString(),
-          tlockChain: window.rememoryTlock.QUICKNET_CHAIN_HASH,
-        };
-
-        setProgress(65);
-        setStatus(t('splitting'));
-        await sleep(100);
-
-        result = window.rememoryCreateBundlesFromArchive(archiveConfig);
-      } else {
-        // Standard path: files → WASM (archive + encrypt + split + bundle)
-        const config = {
-          projectName: state.projectName,
-          threshold: state.threshold,
-          friends: friends,
-          files: filesForWasm,
-          version: window.VERSION || 'dev',
-          githubURL: window.GITHUB_URL || 'https://github.com/eljojo/rememory',
-          anonymous: state.anonymous,
-          defaultLanguage: currentLang || 'en'
-        };
-
-        setProgress(10);
-        setStatus(t('archiving'));
-        await sleep(100);
-
-        setProgress(30);
-        setStatus(t('encrypting'));
-        await sleep(100);
-
-        setProgress(50);
-        setStatus(t('splitting'));
-        await sleep(100);
-
-        result = window.rememoryCreateBundles(config);
+        const result = await window.rememoryTlock.encryptForDate!(archiveData, targetDate);
+        archiveData = result.ciphertext;
+        tlockRound = result.round;
+        tlockUnlock = result.unlockDate.toISOString();
       }
+
+      // Step 3: Age-encrypt, split, and bundle
+      setProgress(50);
+      setStatus(t('encrypting'));
+      await sleep(100);
+
+      setProgress(65);
+      setStatus(t('splitting'));
+      await sleep(100);
+
+      const result = window.rememoryCreateBundlesFromArchive({
+        projectName: state.projectName,
+        threshold: state.threshold,
+        friends: friends,
+        archiveData: archiveData,
+        version: window.VERSION || 'dev',
+        githubURL: window.GITHUB_URL || 'https://github.com/eljojo/rememory',
+        anonymous: state.anonymous,
+        defaultLanguage: currentLang || 'en',
+        tlockRound: tlockRound,
+        tlockUnlock: tlockUnlock,
+      });
 
       if (result.error || !result.bundles) {
         throw new Error(result.error || 'Failed to create bundles');

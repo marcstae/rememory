@@ -69,6 +69,7 @@ func runBundle(cmd *cobra.Command, args []string) error {
 		GitHubReleaseURL: fmt.Sprintf("%s/releases/tag/%s", core.GitHubRepo, version),
 		RecoveryURL:      recoveryURL,
 		NoEmbedManifest:  noEmbedManifest,
+		TlockEnabled:     p.Sealed.TlockEnabled,
 	}
 
 	if err := bundle.GenerateAll(p, cfg); err != nil {

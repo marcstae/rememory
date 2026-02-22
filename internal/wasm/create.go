@@ -35,18 +35,6 @@ type FriendInput struct {
 	Language string
 }
 
-// CreateBundlesConfig holds all parameters for bundle creation.
-type CreateBundlesConfig struct {
-	ProjectName     string
-	Threshold       int
-	Friends         []FriendInput
-	Files           []FileEntry
-	Version         string
-	GitHubURL       string
-	Anonymous       bool
-	DefaultLanguage string // Default bundle language for all friends
-}
-
 // BundleOutput represents a generated bundle for JavaScript.
 type BundleOutput struct {
 	FriendName string
@@ -67,7 +55,6 @@ type CreateBundlesFromArchiveConfig struct {
 	DefaultLanguage string
 	TlockRound      uint64
 	TlockUnlock     string // RFC 3339 timestamp
-	TlockChain      string
 }
 
 // bundleGenConfig holds shared parameters for bundle generation from an
@@ -81,140 +68,6 @@ type bundleGenConfig struct {
 	Anonymous       bool
 	DefaultLanguage string
 	TlockEnabled    bool
-}
-
-// createBundlesJS is the WASM entry point for bundle creation.
-// Args: config object with projectName, threshold, friends, files, version, githubURL
-// Returns: { bundles: [...], error: string|null }
-func createBundlesJS(this js.Value, args []js.Value) any {
-	if len(args) < 1 {
-		return errorResult("missing config argument")
-	}
-
-	configJS := args[0]
-
-	// Parse configuration from JavaScript
-	config := CreateBundlesConfig{
-		ProjectName: configJS.Get("projectName").String(),
-		Threshold:   configJS.Get("threshold").Int(),
-		Version:     configJS.Get("version").String(),
-		GitHubURL:   configJS.Get("githubURL").String(),
-		Anonymous:   configJS.Get("anonymous").Bool(),
-	}
-	if defLang := configJS.Get("defaultLanguage"); !defLang.IsUndefined() && !defLang.IsNull() {
-		config.DefaultLanguage = defLang.String()
-	}
-
-	// Parse friends array
-	friendsJS := configJS.Get("friends")
-	friendsLen := friendsJS.Length()
-	config.Friends = make([]FriendInput, friendsLen)
-	for i := 0; i < friendsLen; i++ {
-		f := friendsJS.Index(i)
-		config.Friends[i] = FriendInput{
-			Name: f.Get("name").String(),
-		}
-		if contact := f.Get("contact"); !contact.IsUndefined() && !contact.IsNull() {
-			config.Friends[i].Contact = contact.String()
-		}
-		if lang := f.Get("language"); !lang.IsUndefined() && !lang.IsNull() {
-			config.Friends[i].Language = lang.String()
-		}
-	}
-
-	// Parse files array
-	filesJS := configJS.Get("files")
-	filesLen := filesJS.Length()
-	config.Files = make([]FileEntry, filesLen)
-	for i := 0; i < filesLen; i++ {
-		f := filesJS.Index(i)
-		name := f.Get("name").String()
-		dataJS := f.Get("data")
-		dataLen := dataJS.Get("length").Int()
-		data := make([]byte, dataLen)
-		js.CopyBytesToGo(data, dataJS)
-		config.Files[i] = FileEntry{
-			Name: name,
-			Data: data,
-		}
-	}
-
-	// Create bundles
-	bundles, err := createBundles(config)
-	if err != nil {
-		return errorResult(err.Error())
-	}
-
-	// Convert bundles to JavaScript array
-	jsBundles := make([]any, len(bundles))
-	for i, b := range bundles {
-		jsData := js.Global().Get("Uint8Array").New(len(b.Data))
-		js.CopyBytesToJS(jsData, b.Data)
-		jsBundles[i] = map[string]any{
-			"friendName": b.FriendName,
-			"fileName":   b.FileName,
-			"data":       jsData,
-		}
-	}
-
-	return js.ValueOf(map[string]any{
-		"bundles": jsBundles,
-		"error":   nil,
-	})
-}
-
-// createBundles creates bundles for all friends.
-func createBundles(config CreateBundlesConfig) ([]BundleOutput, error) {
-	// Validate inputs
-	if config.ProjectName == "" {
-		return nil, fmt.Errorf("project name is required")
-	}
-	if len(config.Friends) < 2 {
-		return nil, fmt.Errorf("need at least 2 friends, got %d", len(config.Friends))
-	}
-	if config.Threshold < 2 {
-		return nil, fmt.Errorf("threshold must be at least 2, got %d", config.Threshold)
-	}
-	if config.Threshold > len(config.Friends) {
-		return nil, fmt.Errorf("threshold (%d) cannot exceed number of friends (%d)", config.Threshold, len(config.Friends))
-	}
-	if len(config.Files) == 0 {
-		return nil, fmt.Errorf("no files provided")
-	}
-
-	// Validate friends
-	for i, f := range config.Friends {
-		if f.Name == "" {
-			return nil, fmt.Errorf("friend %d: name is required", i+1)
-		}
-	}
-
-	// Create ZIP archive of files
-	archiveData, err := createZip(config.Files)
-	if err != nil {
-		return nil, fmt.Errorf("creating archive: %w", err)
-	}
-
-	// Generate random passphrase (v2: split raw bytes, not the base64 string)
-	raw, passphrase, err := crypto.GenerateRawPassphrase(crypto.DefaultPassphraseBytes)
-	if err != nil {
-		return nil, fmt.Errorf("generating passphrase: %w", err)
-	}
-
-	// Encrypt archive
-	var encryptedBuf bytes.Buffer
-	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(archiveData), passphrase); err != nil {
-		return nil, fmt.Errorf("encrypting archive: %w", err)
-	}
-	return bundleFromManifest(encryptedBuf.Bytes(), raw, bundleGenConfig{
-		ProjectName:     config.ProjectName,
-		Threshold:       config.Threshold,
-		Friends:         config.Friends,
-		Version:         config.Version,
-		GitHubURL:       config.GitHubURL,
-		Anonymous:       config.Anonymous,
-		DefaultLanguage: config.DefaultLanguage,
-	})
 }
 
 // createBundlesFromArchive creates bundles from pre-built archive data.
@@ -249,35 +102,31 @@ func createBundlesFromArchive(config CreateBundlesFromArchiveConfig) ([]BundleOu
 		return nil, fmt.Errorf("generating passphrase: %w", err)
 	}
 
-	// Encrypt archive with age (outer layer)
+	// If tlock metadata provided, wrap tlock-encrypted archive in a container ZIP
+	dataToEncrypt := config.ArchiveData
+	tlockEnabled := config.TlockRound > 0
+	if tlockEnabled {
+		meta := &core.TlockMeta{
+			V:      core.TlockContainerVersion,
+			Method: core.TlockMethodQuicknet,
+			Round:  config.TlockRound,
+			Unlock: config.TlockUnlock,
+			Chain:  core.QuicknetChainHash,
+		}
+		container, err := core.BuildTlockContainer(meta, config.ArchiveData)
+		if err != nil {
+			return nil, fmt.Errorf("building tlock container: %w", err)
+		}
+		dataToEncrypt = container
+	}
+
+	// Encrypt with age (outer layer) — always a plain age file
 	var encryptedBuf bytes.Buffer
-	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(config.ArchiveData), passphrase); err != nil {
+	if err := core.Encrypt(&encryptedBuf, bytes.NewReader(dataToEncrypt), passphrase); err != nil {
 		return nil, fmt.Errorf("encrypting archive: %w", err)
 	}
 
-	// If tlock metadata provided, prepend the metadata envelope
-	var manifestData []byte
-	tlockEnabled := config.TlockRound > 0
-	if tlockEnabled {
-		meta := &core.ManifestMeta{
-			V:        core.ManifestMetaVersion,
-			Rememory: config.Version,
-			Tlock: &core.TlockMeta{
-				V:      core.TlockMetaVersion,
-				Method: core.TlockMethodQuicknet,
-				Round:  config.TlockRound,
-				Unlock: config.TlockUnlock,
-				Chain:  core.QuicknetChainHash,
-			},
-		}
-		var envelopeBuf bytes.Buffer
-		if err := core.WriteManifestMeta(&envelopeBuf, meta, bytes.NewReader(encryptedBuf.Bytes())); err != nil {
-			return nil, fmt.Errorf("writing manifest metadata: %w", err)
-		}
-		manifestData = envelopeBuf.Bytes()
-	} else {
-		manifestData = encryptedBuf.Bytes()
-	}
+	manifestData := encryptedBuf.Bytes()
 
 	return bundleFromManifest(manifestData, raw, bundleGenConfig{
 		ProjectName:     config.ProjectName,
@@ -656,10 +505,6 @@ func createBundlesFromArchiveJS(this js.Value, args []js.Value) any {
 	if tlockUnlock := configJS.Get("tlockUnlock"); !tlockUnlock.IsUndefined() && !tlockUnlock.IsNull() {
 		config.TlockUnlock = tlockUnlock.String()
 	}
-	if tlockChain := configJS.Get("tlockChain"); !tlockChain.IsUndefined() && !tlockChain.IsNull() {
-		config.TlockChain = tlockChain.String()
-	}
-
 	// Parse friends array
 	friendsJS := configJS.Get("friends")
 	friendsLen := friendsJS.Length()
