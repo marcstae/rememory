@@ -11,6 +11,6 @@
 - [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md) and this PR follows the guidelines
 - [ ] A human has reviewed the **entire diff** of this PR, every line of code
 - [ ] A human understands the changes and can explain why this approach is correct
-- [ ] Tests pass (`make test`, and `make test-e2e` if I changed HTML/JS, `make lint`)
+- [ ] Tests pass (`make full`)
 - [ ] This PR doesn't have AI-generated boilerplate or co-author lines
 - [ ] This PR was authored and submitted by an AI agent without human review

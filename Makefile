@@ -58,7 +58,7 @@ test-tlock: build
 	REMEMORY_TEST_TLOCK=1 REMEMORY_BIN=./$(BINARY) npx playwright test
 
 # Clean rebuild + all tests (unit + e2e + tlock)
-full: clean build test test-e2e test-tlock
+full: clean build test test-e2e test-tlock lint
 
 lint:
 	go vet ./...
