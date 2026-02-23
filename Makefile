@@ -80,13 +80,7 @@ man: build
 
 # Generate standalone HTML files for static hosting
 html: build
-	@mkdir -p dist
-	./$(BINARY) html index > dist/index.html
-	./$(BINARY) html create > dist/maker.html
-	./$(BINARY) html docs > dist/docs.html
-	./$(BINARY) html recover > dist/recover.html
-	@rsync -a --include='*.png' --include='*/' --exclude='*' docs/screenshots/ dist/screenshots/
-	@echo "Generated dist/ site"
+	./$(BINARY) html site -o dist
 
 # Preview the website locally
 serve: html

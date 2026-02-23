@@ -1,7 +1,7 @@
 package html
 
 import (
-	_ "embed"
+	"embed"
 )
 
 // Embedded assets for the recovery HTML
@@ -44,8 +44,11 @@ var tlockRecoverJS string
 //go:embed assets/index.html
 var indexHTMLTemplate string
 
-//go:embed assets/docs.html
+//go:embed assets/docs-template.html
 var docsHTMLTemplate string
+
+//go:embed docs-content/*.md
+var docsContentFS embed.FS
 
 //go:embed assets/dataflow.js
 var dataflowJS string

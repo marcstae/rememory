@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/eljojo/rememory/internal/core"
+	"github.com/eljojo/rememory/internal/translations"
 )
 
 // GenerateIndexHTML creates the landing page HTML with embedded CSS.
@@ -17,6 +18,12 @@ func GenerateIndexHTML(version, githubURL string) string {
 
 	// Embed dataflow animation
 	html = strings.Replace(html, "{{DATAFLOW_JS}}", dataflowJS, 1)
+
+	// Embed translations
+	html = strings.Replace(html, "{{TRANSLATIONS}}", translations.GetTranslationsJS("index"), 1)
+	html = strings.Replace(html, "{{LANG_OPTIONS}}", translations.LangSelectOptions(), 1)
+	html = strings.Replace(html, "{{LANG_DETECT}}", translations.LangDetectJS(), 1)
+	html = strings.Replace(html, "{{DOCS_LANGS}}", DocsLanguagesJS(), 1)
 
 	// Replace version and GitHub URLs
 	html = strings.Replace(html, "{{VERSION}}", version, -1)

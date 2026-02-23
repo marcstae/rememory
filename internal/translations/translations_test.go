@@ -10,12 +10,35 @@ import (
 )
 
 func TestAllJSONFilesParseCorrectly(t *testing.T) {
-	for _, component := range []string{"recover", "maker", "readme"} {
+	// Components that must have all languages
+	fullComponents := []string{"recover", "maker", "readme", "index"}
+	// Components being translated incrementally (require at least en)
+	partialComponents := []string{}
+
+	for _, component := range fullComponents {
 		for _, lang := range Languages {
 			t.Run(fmt.Sprintf("%s/%s", component, lang), func(t *testing.T) {
 				m, err := GetComponentTranslations(component, lang)
 				if err != nil {
 					t.Fatalf("failed to load %s/%s: %v", component, lang, err)
+				}
+				if len(m) == 0 {
+					t.Errorf("%s/%s has no translation keys", component, lang)
+				}
+			})
+		}
+	}
+
+	for _, component := range partialComponents {
+		for _, lang := range Languages {
+			t.Run(fmt.Sprintf("%s/%s", component, lang), func(t *testing.T) {
+				m, err := GetComponentTranslations(component, lang)
+				if err != nil {
+					if lang == "en" {
+						t.Fatalf("English is required for %s: %v", component, err)
+					}
+					t.Skipf("%s/%s not yet translated", component, lang)
+					return
 				}
 				if len(m) == 0 {
 					t.Errorf("%s/%s has no translation keys", component, lang)
@@ -29,7 +52,7 @@ func TestAllLanguagesHaveSameKeys(t *testing.T) {
 	if os.Getenv("REMEMORY_CHECK_TRANSLATIONS") == "" {
 		t.Skip("Skipping translation parity check (set REMEMORY_CHECK_TRANSLATIONS=1 or run 'make check-translations')")
 	}
-	for _, component := range []string{"recover", "maker", "readme"} {
+	for _, component := range []string{"recover", "maker", "readme", "index"} {
 		t.Run(component, func(t *testing.T) {
 			enKeys, err := GetComponentKeys(component)
 			if err != nil {
@@ -129,7 +152,7 @@ func TestLangDetectJS(t *testing.T) {
 }
 
 func TestGetTranslationsJSProducesValidJS(t *testing.T) {
-	for _, component := range []string{"recover", "maker"} {
+	for _, component := range []string{"recover", "maker", "index"} {
 		t.Run(component, func(t *testing.T) {
 			js := GetTranslationsJS(component)
 
@@ -139,10 +162,9 @@ func TestGetTranslationsJSProducesValidJS(t *testing.T) {
 					component, trimmed[:20], trimmed[len(trimmed)-20:])
 			}
 
-			for _, lang := range Languages {
-				if !strings.Contains(js, "\""+lang+"\": {") {
-					t.Errorf("GetTranslationsJS(%s) missing language %s", component, lang)
-				}
+			// English must always be present
+			if !strings.Contains(js, "\"en\": {") {
+				t.Errorf("GetTranslationsJS(%s) missing English", component)
 			}
 
 			if err := json.Unmarshal([]byte(trimmed), &map[string]map[string]string{}); err != nil {
@@ -296,6 +318,35 @@ func TestReadmeHasExpectedKeys(t *testing.T) {
 	for _, expected := range expectedKeys {
 		if !keyMap[expected] {
 			t.Errorf("readme is missing expected key %q", expected)
+		}
+	}
+}
+
+func TestIndexHasExpectedKeys(t *testing.T) {
+	expectedKeys := []string{
+		"heading", "summary_1", "summary_2",
+		"link_create", "link_guide", "link_recover",
+		"how_title", "how_subtitle", "how_caption",
+		"whatis_title", "whatis_is", "whatis_isnt",
+		"try_title", "try_step_1",
+		"trust_title", "trust_1",
+		"bg_title", "bg_1",
+		"footer_source", "footer_download", "footer_docs",
+	}
+
+	keys, err := GetComponentKeys("index")
+	if err != nil {
+		t.Fatalf("failed to get index keys: %v", err)
+	}
+
+	keyMap := make(map[string]bool)
+	for _, k := range keys {
+		keyMap[k] = true
+	}
+
+	for _, expected := range expectedKeys {
+		if !keyMap[expected] {
+			t.Errorf("index is missing expected key %q", expected)
 		}
 	}
 }

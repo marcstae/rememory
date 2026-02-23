@@ -36,10 +36,17 @@
       margin-bottom: 1.5rem;
     }
 
+    .intro .intro-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
     .intro h1 {
       font-size: 1.75rem;
       color: var(--text);
-      margin-bottom: 0.75rem;
+      margin: 0;
     }
 
     .intro .summary {
@@ -279,6 +286,22 @@
       margin-top: 0.5rem;
     }
 
+    /* Language picker */
+    .lang-picker {
+      display: flex;
+      align-items: center;
+    }
+
+    .lang-picker select {
+      font-size: 0.85rem;
+      padding: 0.2rem 0.4rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--paper-light);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
     @media (max-width: 600px) {
       .intro h1 {
         font-size: 1.5rem;
@@ -298,37 +321,43 @@
 <body>
   <div class="container">
     <section class="intro">
-      <h1>🧠 ReMemory</h1>
-      <p class="summary">
+      <div class="intro-header">
+        <h1>🧠 <span data-i18n="heading">ReMemory</span></h1>
+        <div class="lang-picker">
+          <select id="lang-select" aria-label="Language">
+            {{LANG_OPTIONS}}
+          </select>
+        </div>
+      </div>
+      <p class="summary" data-i18n-html="summary_1">
         ReMemory protects your files by splitting a key among people you trust.
         You decide how many must come together to unlock them — three of five friends, two of two partners, whatever fits.
         No single person can access anything alone. Based on
         <a href="https://en.wikipedia.org/wiki/Shamir%27s_secret_sharing" target="_blank">Shamir's Secret Sharing</a>.
       </p>
-      <p class="summary">
+      <p class="summary" data-i18n-html="summary_2">
         Each person gets a bundle with everything they need to recover.
         It works in any browser, <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span>, with no accounts or servers. If this website disappears, recovery still works.
       </p>
       <div class="links">
-        <a href="maker.html">Create bundles</a>
-        <a href="docs.html">Read the guide</a>
-        <a href="{{GITHUB_REPO}}/blob/main/CHANGELOG.md" target="_blank">Changelog</a>
-        <a href="{{GITHUB_REPO}}" target="_blank">Source on GitHub</a>
+        <a href="docs.html" data-i18n="link_guide">Read the guide</a>
+        <a href="maker.html" data-i18n="link_create">Create bundles</a>
+        <a href="recover.html" data-i18n="link_recover">Recover files</a>
       </div>
     </section>
 
     <section class="how-it-works">
-      <h2>How it works</h2>
-      <p class="subtitle">Your files are encrypted. The key is split into pieces. When enough people bring their pieces together, the files are unlocked.</p>
+      <h2 data-i18n="how_title">How it works</h2>
+      <p class="subtitle" data-i18n="how_subtitle">Your files are encrypted. The key is split into pieces. When enough people bring their pieces together, the files are unlocked.</p>
 
       <div class="dataflow-container">
         <canvas id="dataflow-canvas"></canvas>
       </div>
 
-      <p class="dataflow-caption">Any three of five can recover the files</p>
+      <p class="dataflow-caption" data-i18n="how_caption">Any three of five can recover the files</p>
 
       <div class="reduced-motion-fallback">
-        <p class="flow-text">
+        <p class="flow-text" data-i18n-html="how_fallback">
           <strong>Your File</strong> → <strong>Encrypt</strong> → <strong>Split key into 5 pieces</strong> → <strong>Distribute to friends</strong><br>
           ↓<br>
           <strong>Any 3 friends</strong> → <strong>Combine pieces</strong> → <strong>Unlock</strong> → <strong>File recovered</strong>
@@ -337,81 +366,154 @@
     </section>
 
     <section class="what-is">
-      <h2>What this is and isn't</h2>
+      <h2 data-i18n="whatis_title">What this is and isn't</h2>
       <div class="what-is-grid">
         <div class="what-is-col is-col">
-          <h3>It is:</h3>
+          <h3 data-i18n="whatis_is">It is:</h3>
           <ul>
-            <li>A tool that runs in your browser, <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span></li>
-            <li>A way to split a secret key among people you trust</li>
-            <li>Open source (Apache-2.0)</li>
-            <li>Self-contained — recovery works without this website</li>
+            <li data-i18n-html="whatis_is_1">A tool that runs in your browser, <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span></li>
+            <li data-i18n="whatis_is_2">A way to split a secret key among people you trust</li>
+            <li data-i18n="whatis_is_3">Open source (Apache-2.0)</li>
+            <li data-i18n="whatis_is_4">Self-contained — recovery works without this website</li>
           </ul>
         </div>
         <div class="what-is-col isnt-col">
-          <h3>It isn't:</h3>
+          <h3 data-i18n="whatis_isnt">It isn't:</h3>
           <ul>
-            <li>A service or a company</li>
-            <li>An account system or cloud product</li>
-            <li>Something that stores your data anywhere</li>
-            <li>A backup solution by itself</li>
+            <li data-i18n="whatis_isnt_1">A service or a company</li>
+            <li data-i18n="whatis_isnt_2">An account system or cloud product</li>
+            <li data-i18n="whatis_isnt_3">Something that stores your data anywhere</li>
+            <li data-i18n="whatis_isnt_4">A backup solution by itself</li>
           </ul>
         </div>
       </div>
     </section>
 
     <section class="try-it">
-      <h2>See how it works</h2>
+      <h2 data-i18n="try_title">See how it works</h2>
       <ol>
-        <li><a href="{{GITHUB_REPO}}/releases/latest/download/demo-bundles.zip">Download the demo bundles</a></li>
-        <li>Open <code>bundle-alice/recover.html</code> in your browser</li>
-        <li>Drag Bob's and Camila's README files onto the page</li>
-        <li>When enough pieces are added, the files unlock</li>
+        <li data-i18n-html="try_step_1"><a href="{{GITHUB_REPO}}/releases/latest/download/demo-bundles.zip">Download the demo bundles</a></li>
+        <li data-i18n-html="try_step_2">Open <code>bundle-alice/recover.html</code> in your browser</li>
+        <li data-i18n="try_step_3">Drag Bob's and Camila's README files onto the page</li>
+        <li data-i18n="try_step_4">When enough pieces are added, the files unlock</li>
       </ol>
-      <p class="note">This is the closest thing to what a real recovery feels like.</p>
+      <p class="note" data-i18n="try_note">This is the closest thing to what a real recovery feels like.</p>
     </section>
 
     <section class="trust">
-      <h2>On trust and verification</h2>
+      <h2 data-i18n="trust_title">On trust and verification</h2>
       <ul>
-        <li>Recovery works without this project existing — each bundle is self-contained</li>
-        <li>The code is open source — <a href="{{GITHUB_REPO}}" target="_blank">read it on GitHub</a></li>
-        <li>A <a href="{{GITHUB_REPO}}/blob/main/docs/security-review.md" target="_blank">security review</a> explains the cryptographic choices</li>
-        <li>Everything runs locally. Your files never leave your device</li>
-        <li>Try the demo bundles before using it with anything important</li>
-        <li>Encryption uses <a href="https://github.com/FiloSottile/age" target="_blank">age</a> — a modern, well-regarded tool</li>
-        <li>Read more about <a href="docs.html#cryptography">what protects your data</a> and <a href="docs.html#what-could-go-wrong">what could go wrong</a></li>
+        <li data-i18n="trust_1">Recovery works without this project existing — each bundle is self-contained</li>
+        <li data-i18n-html="trust_2">The code is open source — <a href="{{GITHUB_REPO}}" target="_blank">read it on GitHub</a></li>
+        <li data-i18n-html="trust_3">A <a href="{{GITHUB_REPO}}/blob/main/docs/security-review.md" target="_blank">security review</a> explains the cryptographic choices</li>
+        <li data-i18n="trust_4">Everything runs locally. Your files never leave your device</li>
+        <li data-i18n="trust_5">Try the demo bundles before using it with anything important</li>
+        <li data-i18n-html="trust_6">Encryption uses <a href="https://github.com/FiloSottile/age" target="_blank">age</a> — a modern, well-regarded tool</li>
+        <li data-i18n-html="trust_7">Read more about <a href="docs.html#cryptography">what protects your data</a> and <a href="docs.html#what-could-go-wrong">what could go wrong</a></li>
       </ul>
     </section>
 
     <section class="background">
-      <h2>Why I built this</h2>
-      <p>
+      <h2 data-i18n="bg_title">Why I built this</h2>
+      <p data-i18n="bg_1">
         Two things led me to build ReMemory.
       </p>
-      <p>
+      <p data-i18n-html="bg_2">
         First, I watched <a href="https://www.youtube.com/watch?v=k_P7Y0-wgos" target="_blank">a documentary about Clive Wearing</a>, a man who has lived with severe amnesia since 1985. Seeing how fragile memory can be made me think about what would happen to my digital life if something similar happened to me.
       </p>
-      <p>
+      <p data-i18n="bg_3">
         Second, I've had several concussions from cycling accidents. Each time, I've been lucky to recover fully — but the reminders add up.
       </p>
-      <p>
+      <p data-i18n="bg_4">
         ReMemory came out of that: a way to ensure the people I trust can access what matters, even if I can't help them.
       </p>
+      <p data-i18n-html="bg_changelog">ReMemory keeps growing. Check the <a href="{{GITHUB_REPO}}/blob/main/CHANGELOG.md" target="_blank">changelog</a> to see what's new.</p>
     </section>
   </div>
 
   <footer id="footer">
-    <p style="font-size: 0.8125rem; color: #8A8480;">* <a href="docs.html#timelock" style="color: #8A8480;">Time-locked</a> archives need a brief internet connection at recovery time.</p>
+    <p style="font-size: 0.8125rem; color: #8A8480;" data-i18n-html="footer_timelock">* <a href="docs.html#timelock" style="color: #8A8480;">Time-locked</a> archives need a brief internet connection at recovery time.</p>
     <p>
-      <a href="{{GITHUB_REPO}}" target="_blank">Source Code</a> ·
-      <a href="{{GITHUB_URL}}" target="_blank">Download CLI</a> ·
-      <a href="docs.html">Documentation</a> ·
-      <a href="{{GITHUB_REPO}}/blob/main/CHANGELOG.md" target="_blank">Changelog</a>
+      <a href="{{GITHUB_REPO}}" target="_blank" data-i18n="footer_source">Source Code</a> ·
+      <a href="{{GITHUB_URL}}" target="_blank" data-i18n="footer_download">Download</a> ·
+      <a href="docs.html" data-i18n="footer_docs">Documentation</a>
     </p>
-    <p class="version">{{VERSION}}</p>
+    <p class="version"><a href="{{GITHUB_REPO}}/blob/main/CHANGELOG.md" target="_blank" style="color: var(--text-muted); text-decoration: none;">{{VERSION}}</a></p>
   </footer>
 
   <script>{{DATAFLOW_JS}}</script>
+
+  <!-- Translations -->
+  <script>
+    const translations = {{TRANSLATIONS}};
+    const docsLangs = {{DOCS_LANGS}};
+
+    let currentLang = 'en';
+
+    function t(key) {
+      return (translations[currentLang] && translations[currentLang][key])
+        || (translations['en'] && translations['en'][key])
+        || key;
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('rememory-lang', lang);
+
+      // Update select
+      var sel = document.getElementById('lang-select');
+      if (sel) sel.value = lang;
+
+      // Update text-only elements
+      document.querySelectorAll('[data-i18n]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+      });
+
+      // Update elements with inline HTML
+      document.querySelectorAll('[data-i18n-html]').forEach(function(el) {
+        var key = el.getAttribute('data-i18n-html');
+        el.innerHTML = t(key);
+      });
+
+      // Update docs links to point to the correct language variant
+      // Only rewrite if a translated guide exists for this language
+      var docsFile = (lang !== 'en' && docsLangs.indexOf(lang) !== -1)
+        ? 'docs.' + lang + '.html' : 'docs.html';
+      document.querySelectorAll('a[href^="docs."]').forEach(function(a) {
+        var h = a.getAttribute('href');
+        a.setAttribute('href', h.replace(/docs(?:\.[a-z]{2})?\.html/, docsFile));
+      });
+
+      // Update dataflow animation labels
+      if (window.setDataflowLabels) {
+        window.setDataflowLabels({
+          yourFile: t('anim_your_file'),
+          encrypt: t('anim_encrypt'),
+          split: t('anim_split'),
+          combine: t('anim_combine'),
+          recovered: t('anim_recovered'),
+          later: t('anim_later')
+        });
+      }
+    }
+
+    // Set initial language
+    (function() {
+      var saved = localStorage.getItem('rememory-lang');
+      var langs = {{LANG_DETECT}};
+      var detected = navigator.languages.find(function(l) { return langs.indexOf(l) !== -1; })
+        || navigator.languages.map(function(l) { return l.split('-')[0]; }).find(function(l) { return langs.indexOf(l) !== -1; });
+      currentLang = saved || detected || 'en';
+    })();
+
+    document.addEventListener('DOMContentLoaded', function() {
+      setLanguage(currentLang);
+
+      document.getElementById('lang-select').addEventListener('change', function(e) {
+        setLanguage(e.target.value);
+      });
+    });
+  </script>
 </body>
 </html>

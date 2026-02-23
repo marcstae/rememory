@@ -17,6 +17,9 @@ var makerFS embed.FS
 //go:embed readme/*.json
 var readmeFS embed.FS
 
+//go:embed index/*.json
+var indexFS embed.FS
+
 // Languages lists all supported language codes.
 var Languages = []string{"en", "es", "de", "fr", "sl", "pt", "zh-TW"}
 
@@ -64,7 +67,7 @@ func LangDetectJS() string {
 }
 
 // GetTranslationsJS builds the JavaScript translations object for injection into HTML templates.
-// component must be "recover", "maker", or "readme".
+// component must be "recover", "maker", "readme", or "index".
 // Returns a string like: { en: {...}, es: {...}, de: {...}, fr: {...}, sl: {...} }
 func GetTranslationsJS(component string) string {
 	fs := fsForComponent(component)
@@ -234,6 +237,8 @@ func fsForComponent(component string) *embed.FS {
 		return &makerFS
 	case "readme":
 		return &readmeFS
+	case "index":
+		return &indexFS
 	default:
 		return nil
 	}

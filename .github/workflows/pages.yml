@@ -48,13 +48,7 @@ jobs:
         run: make build
 
       - name: Generate HTML files
-        run: |
-          mkdir -p _site
-          ./rememory html index > _site/index.html
-          ./rememory html create > _site/maker.html
-          ./rememory html docs > _site/docs.html
-          ./rememory html recover > _site/recover.html
-          rsync -a docs/screenshots/ _site/screenshots/
+        run: ./rememory html site -o _site
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
