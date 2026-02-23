@@ -79,5 +79,6 @@
   "timelock_years": "年",
   "timelock_preview": "{0} 之後可開啟",
   "timelock_network_hint": "復原時需要短暫的網路連線來驗證時間鎖。",
-  "timelock_encrypting": "正在套用時間鎖..."
+  "timelock_encrypting": "正在套用時間鎖...",
+  "next_steps_link": "接下來該做什麼"
 }

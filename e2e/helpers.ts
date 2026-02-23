@@ -308,7 +308,7 @@ export class RecoveryPage {
   }
 
   async expectRecoveryComplete(): Promise<void> {
-    await expect(this.page.locator('#status-message')).toContainText('recovered', { timeout: 60000 });
+    await expect(this.page.locator('#status-message')).toContainText('files are ready', { timeout: 60000 });
   }
 
   async expectFileCount(count: number): Promise<void> {

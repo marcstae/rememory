@@ -1247,10 +1247,15 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     });
 
     setProgress(100);
-    setStatus(t('complete', files.length), 'success');
+    setStatus(t('complete'), 'success', t('complete_subtitle'));
     elements.downloadActions?.classList.remove('hidden');
     elements.recoverBtn?.classList.add('hidden');
     state.recoveryComplete = true;
+
+    // Update step 3 heading
+    const cards = document.querySelectorAll('.card');
+    const step3Title = cards[2]?.querySelector('[data-i18n="step3_title"]');
+    if (step3Title) step3Title.textContent = t('step3_complete_title');
   }
 
   function handleRecoveryError(err: unknown): void {
@@ -1328,10 +1333,16 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     }
   }
 
-  function setStatus(msg: string, type?: string): void {
+  function setStatus(msg: string, type?: string, subtitle?: string): void {
     if (elements.statusMessage) {
       elements.statusMessage.textContent = msg;
       elements.statusMessage.className = 'status-message' + (type ? ' ' + type : '');
+      if (subtitle) {
+        const sub = document.createElement('span');
+        sub.className = 'status-subtitle';
+        sub.textContent = subtitle;
+        elements.statusMessage.appendChild(sub);
+      }
     }
   }
 

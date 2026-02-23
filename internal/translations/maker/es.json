@@ -79,5 +79,6 @@
   "timelock_years": "años",
   "timelock_preview": "Se abre después del {0}",
   "timelock_network_hint": "La recuperación necesitará una breve conexión a internet para verificar el bloqueo por fecha.",
-  "timelock_encrypting": "Aplicando bloqueo por fecha..."
+  "timelock_encrypting": "Aplicando bloqueo por fecha...",
+  "next_steps_link": "Qué hacer ahora"
 }
