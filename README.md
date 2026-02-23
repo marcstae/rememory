@@ -2,7 +2,9 @@
 
 **Encrypt your files and split the key among people you trust.**
 
-ReMemory splits a decryption key using Shamir's Secret Sharing and gives each person a self-contained tool to recover the files together — offline, in any browser.
+ReMemory splits a decryption key using Shamir's Secret Sharing and gives each person a self-contained tool to recover the files together — offline, in any browser.*
+
+<sub>* [Time-locked](#time-delayed-recovery-experimental) archives need a brief internet connection at recovery time.</sub>
 
 ## Recovery works without this project
 
@@ -130,7 +132,7 @@ Traditional approaches fail:
 ReMemory takes a different approach:
 - **No single point of failure** — requires multiple people to cooperate
 - **No trust in any one person** — even your most trusted friend can't access secrets alone
-- **Offline and self-contained** — recovery works without internet or servers
+- **Offline and self-contained** — recovery works without internet or servers*
 - **Designed for non-technical people** — clear instructions, not cryptographic puzzles
 
 </details>
@@ -177,8 +179,26 @@ See the **[Security Review](docs/security-review.md)** for details.
 | Secret sharing | Shamir's Secret Sharing over GF(2⁸) |
 | Integrity | SHA-256 checksums |
 | Passphrase | 256 bits from crypto/rand |
+| Time lock (optional) | [drand](https://www.cloudflare.com/en-ca/leagueofentropy/) tlock (BLS12-381 IBE, inner layer) |
 
 **A single piece reveals nothing about your secret.** This is a mathematical guarantee of Shamir's Secret Sharing — any fewer than *threshold* pieces contain zero information about the original secret.
+
+</details>
+
+<details>
+<summary>Time-Delayed Recovery (Experimental)</summary>
+
+You can set a waiting period when creating bundles. Even with enough pieces, the files stay locked until the date you chose — for example, 30 days, 6 months, or a specific date.
+
+This uses the [League of Entropy](https://www.cloudflare.com/en-ca/leagueofentropy/) (drand), a distributed randomness beacon run by organizations around the world. At recovery time, a brief internet connection is needed — not to send data, but to verify that enough time has passed.
+
+**CLI:** `rememory seal --timelock 30d` (or `6m`, `1y`, `2027-06-15T00:00:00Z`)
+**Web:** Enable under "Advanced options" in the [bundle creator](https://eljojo.github.io/rememory/maker.html).
+
+**Important caveats:**
+- Recovery requires internet access (to check the drand beacon)
+- If the League of Entropy stops operating before your time lock expires, recovery won't work
+- Without the time lock, recovery works fully offline — the time lock adds this one dependency
 
 </details>
 
@@ -193,6 +213,8 @@ See the **[Security Review](docs/security-review.md)** for details.
 | Browsers change dramatically? | Pure JavaScript with no external dependencies |
 | You forget how this works? | Each bundle's README.txt explains everything |
 | Some friends can't be reached? | That's why you set threshold below total friends |
+| Time lock used, but no internet at recovery? | Wait and try again — data is safe, just needs the beacon check |
+| League of Entropy shuts down? | Time-locked archives become unrecoverable — only a risk if you use the time lock feature |
 
 </details>
 
@@ -273,6 +295,7 @@ Built on:
 - [HashiCorp Vault's Shamir implementation](https://github.com/hashicorp/vault/blob/main/shamir/shamir.go) — Shamir's Secret Sharing (CLI)
 - [fflate](https://github.com/101arrowz/fflate) — Fast JavaScript compression
 - [tarparser](https://github.com/highercomve/tarparser) — Tar archive extraction
+- [tlock](https://github.com/drand/tlock) — Time-lock encryption via drand
 - [Cobra](https://github.com/spf13/cobra) — CLI framework
 
 The protocol was [originally designed in a Google Doc](https://docs.google.com/document/d/1B4_wIN3fXqb67Tln0v5v2pMRFf8v5umkKikaqCRAdyM/edit?usp=sharing) in 2023.

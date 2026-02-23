@@ -4,7 +4,7 @@ import type {
   CreationState,
   BundleFile,
   GeneratedBundle,
-  TranslationFunction
+  TranslationFunction,
 } from './types';
 
 // Translation function and language state (defined in HTML)
@@ -59,7 +59,10 @@ declare let currentLang: string;
     generating: false,
     generationComplete: false,
     anonymous: false,
-    numShares: 5
+    numShares: 5,
+    tlockEnabled: false,
+    tlockValue: 30,
+    tlockUnit: 'd' as string,
   };
 
   // DOM elements interface
@@ -148,6 +151,7 @@ declare let currentLang: string;
     setupFriends();
     setupFiles();
     setupGenerate();
+    setupTimelock();
 
     // Add initial 2 friends
     addFriend();
@@ -620,6 +624,72 @@ declare let currentLang: string;
     elements.downloadYamlBtn?.addEventListener('click', downloadProjectYaml);
   }
 
+  // ============================================
+  // Time Lock (Advanced Options)
+  // ============================================
+
+  function setupTimelock(): void {
+    // Only show advanced options if tlock-js is available
+    if (!window.rememoryTlock) return;
+
+    const advancedTabs = document.getElementById('advanced-options');
+    advancedTabs?.classList.remove('hidden');
+
+    const tlockPanel = document.getElementById('timelock-panel');
+    const tlockDetails = document.getElementById('timelock-details');
+    const checkbox = document.getElementById('timelock-checkbox') as HTMLInputElement | null;
+    const optionsDiv = document.getElementById('timelock-options');
+    const valueInput = document.getElementById('timelock-value') as HTMLInputElement | null;
+    const unitSelect = document.getElementById('timelock-unit') as HTMLSelectElement | null;
+    const datePreview = document.getElementById('timelock-date-preview');
+
+    // Simple/Advanced tab switching
+    advancedTabs?.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        advancedTabs.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const mode = (tab as HTMLElement).dataset.mode;
+        tlockPanel?.classList.toggle('hidden', mode !== 'advanced');
+        if (mode !== 'advanced') {
+          // Reset tlock when switching back to simple
+          if (checkbox) checkbox.checked = false;
+          state.tlockEnabled = false;
+          optionsDiv?.classList.add('hidden');
+          tlockDetails?.classList.add('hidden');
+          updateTimelockPreview();
+        }
+      });
+    });
+
+    checkbox?.addEventListener('change', () => {
+      state.tlockEnabled = checkbox.checked;
+      optionsDiv?.classList.toggle('hidden', !checkbox.checked);
+      tlockDetails?.classList.toggle('hidden', !checkbox.checked);
+      updateTimelockPreview();
+    });
+
+    valueInput?.addEventListener('input', () => {
+      state.tlockValue = parseInt(valueInput.value, 10) || 1;
+      updateTimelockPreview();
+    });
+
+    unitSelect?.addEventListener('change', () => {
+      state.tlockUnit = unitSelect.value;
+      updateTimelockPreview();
+    });
+
+    function updateTimelockPreview(): void {
+      if (!datePreview || !state.tlockEnabled) {
+        if (datePreview) datePreview.textContent = '';
+        return;
+      }
+      const target = window.rememoryTlock?.computeTimelockDate?.(state.tlockValue, state.tlockUnit);
+      if (target) {
+        datePreview.textContent = t('timelock_preview', window.rememoryTlock!.formatTimelockDate(target));
+      }
+    }
+  }
+
   function checkGenerateReady(): void {
     if (elements.generateBtn) {
       elements.generateBtn.disabled = !state.wasmReady || state.generating;
@@ -759,30 +829,55 @@ declare let currentLang: string;
         }));
       }
 
-      const config = {
-        projectName: state.projectName,
-        threshold: state.threshold,
-        friends: friends,
-        files: filesForWasm,
-        version: window.VERSION || 'dev',
-        githubURL: window.GITHUB_URL || 'https://github.com/eljojo/rememory',
-        anonymous: state.anonymous,
-        defaultLanguage: currentLang || 'en'
-      };
-
+      // Step 1: Create archive
       setProgress(10);
       setStatus(t('archiving'));
       await sleep(100);
 
-      setProgress(30);
+      const archiveResult = window.rememoryCreateArchive(filesForWasm);
+      if (archiveResult.error || !archiveResult.data) {
+        throw new Error(archiveResult.error || 'Failed to create archive');
+      }
+
+      // Step 2: Optionally tlock-encrypt
+      let archiveData = archiveResult.data;
+      let tlockRound: number | undefined;
+      let tlockUnlock: string | undefined;
+
+      if (state.tlockEnabled && window.rememoryTlock) {
+        setProgress(25);
+        setStatus(t('timelock_encrypting'));
+        await sleep(100);
+
+        const targetDate = window.rememoryTlock.computeTimelockDate!(state.tlockValue, state.tlockUnit);
+        if (!targetDate) throw new Error('Invalid time lock date');
+        const result = await window.rememoryTlock.encryptForDate!(archiveData, targetDate);
+        archiveData = result.ciphertext;
+        tlockRound = result.round;
+        tlockUnlock = result.unlockDate.toISOString();
+      }
+
+      // Step 3: Age-encrypt, split, and bundle
+      setProgress(50);
       setStatus(t('encrypting'));
       await sleep(100);
 
-      setProgress(50);
+      setProgress(65);
       setStatus(t('splitting'));
       await sleep(100);
 
-      const result = window.rememoryCreateBundles(config);
+      const result = window.rememoryCreateBundlesFromArchive({
+        projectName: state.projectName,
+        threshold: state.threshold,
+        friends: friends,
+        archiveData: archiveData,
+        version: window.VERSION || 'dev',
+        githubURL: window.GITHUB_URL || 'https://github.com/eljojo/rememory',
+        anonymous: state.anonymous,
+        defaultLanguage: currentLang || 'en',
+        tlockRound: tlockRound,
+        tlockUnlock: tlockUnlock,
+      });
 
       if (result.error || !result.bundles) {
         throw new Error(result.error || 'Failed to create bundles');

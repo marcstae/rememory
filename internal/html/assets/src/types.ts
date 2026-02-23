@@ -10,15 +10,6 @@ export interface BundleFile {
   data: Uint8Array;
 }
 
-export interface BundleConfig {
-  projectName: string;
-  threshold: number;
-  friends: FriendInput[];
-  files: BundleFile[];
-  version: string;
-  githubURL: string;
-}
-
 export interface GeneratedBundle {
   friendName: string;
   fileName: string;
@@ -28,6 +19,24 @@ export interface GeneratedBundle {
 export interface BundleCreateResult {
   error?: string;
   bundles?: GeneratedBundle[];
+}
+
+export interface ArchiveCreateResult {
+  error?: string;
+  data?: Uint8Array;
+}
+
+export interface BundleFromArchiveConfig {
+  projectName: string;
+  threshold: number;
+  friends: FriendInput[];
+  archiveData: Uint8Array;
+  version: string;
+  githubURL: string;
+  anonymous?: boolean;
+  defaultLanguage?: string;
+  tlockRound?: number;
+  tlockUnlock?: string;
 }
 
 // ============================================
@@ -69,6 +78,50 @@ export interface PersonalizationData {
   total: number;
   language?: string;
   manifestB64?: string; // Base64-encoded MANIFEST.age (when small enough to embed)
+  tlockEnabled?: boolean; // Signals tlock-js is included for time-lock decryption
+}
+
+// ============================================
+// Tlock Types (for time-lock encryption)
+// ============================================
+
+export interface TlockContainerMeta {
+  v: number;
+  method: string;
+  round: number;
+  unlock: string;
+  chain: string;
+}
+
+// RememoryTlock is the interface exposed on window.rememoryTlock.
+// tlock-create.ts and tlock-recover.ts each expose a subset; both are valid.
+export interface RememoryTlock {
+  // Creation-side (tlock-create.ts)
+  encrypt?(plaintext: Uint8Array, roundNumber: number): Promise<Uint8Array>;
+  encryptForDate?(plaintext: Uint8Array, targetDate: Date): Promise<{
+    ciphertext: Uint8Array;
+    round: number;
+    unlockDate: Date;
+  }>;
+  computeTimelockDate?(value: number, unit: string): Date | null;
+  roundForTime?(target: Date): number;
+  timeForRound?(round: number): Date;
+
+  // Recovery-side (tlock-recover.ts)
+  decrypt?(ciphertext: Uint8Array): Promise<Uint8Array>;
+  isRoundAvailable?(roundNumber: number): Promise<boolean>;
+  waitAndDecrypt?(
+    meta: TlockContainerMeta,
+    ciphertext: Uint8Array,
+    onTick: (unlockDate: Date) => void,
+    onReady: (archive: Uint8Array) => void,
+    onError: (err: Error) => void,
+  ): void;
+  stopWaiting?(): void;
+  formatUnlockDate?(date: Date, t: TranslationFunction): { text: string; relative: boolean };
+
+  // Shared
+  formatTimelockDate(date: Date): string;
 }
 
 // ============================================
@@ -97,6 +150,9 @@ export interface CreationState {
   wasmReady: boolean;
   generating: boolean;
   generationComplete: boolean;
+  tlockEnabled: boolean;
+  tlockValue: number;
+  tlockUnit: string;
 }
 
 // ============================================
@@ -132,7 +188,8 @@ declare global {
     rememoryAppReady?: boolean;
 
     // Creation functions (create.wasm, used by maker.html)
-    rememoryCreateBundles(config: BundleConfig): BundleCreateResult;
+    rememoryCreateArchive(files: BundleFile[]): ArchiveCreateResult;
+    rememoryCreateBundlesFromArchive(config: BundleFromArchiveConfig): BundleCreateResult;
     rememoryParseProjectYAML(yaml: string): ProjectParseResult;
 
     // Shared utilities (exposed by shared.ts)
@@ -149,6 +206,9 @@ declare global {
 
     // Personalization data (embedded in recover.html)
     PERSONALIZATION?: PersonalizationData | null;
+
+    // Tlock API (time-lock encryption, conditionally included)
+    rememoryTlock?: RememoryTlock;
 
     // Embedded constants
     WASM_BINARY?: string;

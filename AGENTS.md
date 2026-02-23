@@ -101,22 +101,22 @@ These values apply to the PDF (`internal/pdf/readme.go`), website CSS (`internal
 ## Non-goals
 
 - No server-side component.
-- No network calls in the recovery path.
+- No network calls in the recovery path (exception: tlock-enabled bundles require a drand beacon check).
 - No telemetry or analytics.
 - No dependency on external CDNs or remote resources.
 - No runtime dependency on Node/npm for end users or recovery.
 - No promise of "revocation" once shares are distributed — you can't unsend data.
-- No custom cryptographic primitives — composition of established tools only (age, Shamir via HashiCorp Vault).
+- No custom cryptographic primitives — composition of established tools only (age, Shamir via HashiCorp Vault, tlock via drand).
 - No "guaranteed to work forever" claims — the goal is durability, not certainty.
 
 ## Security Invariants
 
 These must not regress. Reference them in reviews.
 
-- `recover.html` must work offline, from a local `file://` open, without installation.
-- Bundles must be self-contained and must not require this repo, any server, or the internet to function.
+- `recover.html` must work offline, from a local `file://` open, without installation. Exception: tlock-enabled bundles need a brief internet connection to check the drand beacon at recovery time.
+- Bundles must be self-contained and must not require this repo, any server, or the internet to function. Exception: tlock-enabled bundles need drand beacon access at recovery time only.
 - Below-threshold shares must not leak information about the secret (information-theoretic security). Don't add metadata to shares that could weaken this.
-- Manifest encryption must remain age-based. No custom crypto.
+- Manifest encryption must remain age-based. No custom crypto. Tlock sits inside age as an inner layer (defense in depth).
 - Any cryptographic change requires tests, review, and clear rationale.
 
 ## Build & Development Commands
@@ -124,6 +124,7 @@ These must not regress. Reference them in reviews.
 ```bash
 make build          # Compile TypeScript, build create.wasm, then build CLI binary
 make test           # Run all Go tests (go test -v ./...)
+make test-tlock     # Run ALL drand-dependent tests: Go integration + Playwright E2E (requires internet)
 make lint           # Run go vet + gofmt check
 make test-e2e       # Run Playwright browser tests (requires: npm install, npx playwright install)
 make html           # Generate static site into dist/ (index.html, maker.html, docs.html, recover.html)
@@ -137,12 +138,14 @@ go test -v -run TestName ./internal/core/
 
 The build pipeline is: **TypeScript (esbuild) -> WASM (for maker.html) -> Go binary**. Always use `make test` instead of bare `go test ./...` — the Go build embeds compiled `.wasm` and `.js` files via `//go:embed`, so `go test` will fail if those assets haven't been generated first.
 
+**When to run which tests:** `make test-e2e` takes ~2 minutes — don't run it after every change. Use `make test` (Go unit tests) for Go logic changes. Only run `make test-e2e` when you've changed HTML structure, TypeScript/JavaScript code, CSS that affects layout or visibility, or WASM bindings — things that could break browser behavior. Translation-only changes, documentation edits, copy tweaks, and Go-only changes don't need E2E tests.
+
 ## Architecture
 
 ### WASM and Native JS
 
-- **`recover.html`** uses **native JavaScript crypto** (no WASM). Dependencies like `age-encryption`, `shamir-secret-sharing`, `fflate`, and `tarparser` are bundled via esbuild into `app.js`. This keeps bundles small (~170KB) and avoids WASM compatibility issues.
-- **`maker.html`** uses **WASM** (`create.wasm`) for bundle creation. Built with `-tags create` from `internal/wasm/`. Entry point: `main_create.go`.
+- **`recover.html`** uses **native JavaScript crypto** (no WASM). Dependencies like `age-encryption`, `shamir-secret-sharing`, `fflate`, and `tarparser` are bundled via esbuild into `app.js`. This keeps bundles small (~170KB) and avoids WASM compatibility issues. For tlock-enabled bundles, `tlock.js` (bundled from `tlock-js` + `drand-client`) is also included.
+- **`maker.html`** uses **WASM** (`create.wasm`) for bundle creation. Built with `-tags create` from `internal/wasm/`. Entry point: `main_create.go`. Includes `tlock.js` by default for time-lock support (opt-out with `--no-timelock`).
   `GOOS=js GOARCH=wasm go build -tags create -o internal/html/assets/create.wasm ./internal/wasm`
 
 The WASM module exposes Go functions to JavaScript via `syscall/js` (registered in `main_create.go`), with the JS bridge in `js_wrappers.go`.
@@ -169,7 +172,7 @@ When `MANIFEST.age` is 10 MB or less, it is also base64-encoded and embedded in 
 
 ### Key packages
 
-- `internal/core/` — Cryptographic primitives: Shamir split/combine, age encrypt/decrypt, share encoding (PEM-like `BEGIN REMEMORY SHARE` format), tar.gz archive
+- `internal/core/` — Cryptographic primitives: Shamir split/combine, age encrypt/decrypt, tlock time-lock encrypt/decrypt, tlock container (ZIP with metadata + ciphertext), share encoding (PEM-like `BEGIN REMEMORY SHARE` format), tar.gz archive
 - `internal/project/` — Project config (`project.yml`), friend definitions, template rendering
 - `internal/manifest/` — Archive/extract the manifest directory
 - `internal/cmd/` — Cobra CLI commands (init, seal, bundle, recover, verify, demo, html, status, doc)
@@ -183,6 +186,7 @@ Frontend code lives in `internal/html/assets/src/`. Compiled via esbuild to IIFE
 - `shared.ts` — Common utilities (toast notifications, formatting)
 - `app.ts` — Recovery UI (`recover.html`), uses native JS crypto from `crypto/` subdirectory
 - `create-app.ts` — Bundle creation UI (`maker.html`), uses WASM
+- `tlock.ts` — Tlock time-lock encryption/decryption wrapper (bundled as `tlock.js` IIFE)
 
 The `crypto/` subdirectory contains the native JavaScript crypto implementations for recovery: Shamir combining, age decryption, tar.gz extraction, share parsing, BIP39 word encoding. These replace the WASM module that was previously used.
 

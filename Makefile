@@ -1,4 +1,4 @@
-.PHONY: build test test-e2e test-e2e-headed lint clean install wasm ts build-all bump-patch bump-minor bump-major man html serve demo generate-fixtures full update-pdf-png release check-translations
+.PHONY: build test test-tlock test-e2e test-e2e-headed lint clean install wasm ts build-all bump-patch bump-minor bump-major man html serve demo demo-tlock generate-fixtures full update-pdf-png release check-translations
 
 BINARY := rememory
 VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
@@ -15,6 +15,8 @@ ts:
 	esbuild internal/html/assets/src/shared.ts --bundle --format=iife --global-name=_shared --outfile=internal/html/assets/shared.js --target=es2020
 	esbuild internal/html/assets/src/app.ts --bundle --format=iife --outfile=internal/html/assets/app.js --target=es2020 --loader:.txt=text --conditions=zbar-inlined
 	esbuild internal/html/assets/src/create-app.ts --bundle --format=iife --outfile=internal/html/assets/create-app.js --target=es2020
+	esbuild internal/html/assets/src/tlock-create.ts --bundle --format=iife --outfile=internal/html/assets/tlock-create.js --target=es2020
+	esbuild internal/html/assets/src/tlock-recover.ts --bundle --format=iife --outfile=internal/html/assets/tlock-recover.js --target=es2020
 
 # Build WASM module for maker.html (bundle creation tool)
 # Note: recover.html uses native JavaScript crypto, no WASM needed
@@ -49,8 +51,14 @@ test-e2e-headed: build
 	@if [ ! -d node_modules ]; then echo "Run 'npm install' first"; exit 1; fi
 	REMEMORY_BIN=./$(BINARY) npx playwright test --headed
 
-# Clean rebuild + all tests (unit + e2e)
-full: clean build test test-e2e
+# Run tlock integration tests (requires internet; drand network access)
+test-tlock: build
+	REMEMORY_TEST_TLOCK=1 go test -v -run TestTlock ./...
+	@if [ ! -d node_modules ]; then echo "Run 'npm install' first"; exit 1; fi
+	REMEMORY_TEST_TLOCK=1 REMEMORY_BIN=./$(BINARY) npx playwright test
+
+# Clean rebuild + all tests (unit + e2e + tlock)
+full: clean build test test-e2e test-tlock lint
 
 lint:
 	go vet ./...
@@ -60,7 +68,7 @@ lint:
 clean:
 	rm -f $(BINARY) coverage.out coverage.html
 	rm -f internal/html/assets/recover.wasm internal/html/assets/create.wasm
-	rm -f internal/html/assets/app.js internal/html/assets/create-app.js internal/html/assets/shared.js internal/html/assets/types.js
+	rm -f internal/html/assets/app.js internal/html/assets/create-app.js internal/html/assets/shared.js internal/html/assets/types.js internal/html/assets/tlock-create.js internal/html/assets/tlock-recover.js
 	rm -rf dist/ man/
 	go clean -testcache
 
@@ -89,6 +97,12 @@ serve: html
 demo: build
 	rm -rf demo-recovery
 	./$(BINARY) demo
+	open demo-recovery/output/bundles/bundle-alice.zip
+
+# Run demo with a 5-minute time lock
+demo-tlock: build
+	rm -rf demo-recovery
+	./$(BINARY) demo --timelock 5min
 	open demo-recovery/output/bundles/bundle-alice.zip
 
 # Check that all languages have the same translation keys as English

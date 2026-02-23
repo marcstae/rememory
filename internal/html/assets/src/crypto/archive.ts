@@ -1,6 +1,7 @@
-// Archive extraction (tar.gz and ZIP)
+// Archive extraction (tar.gz and ZIP) and tlock container detection
 import { parseTar } from 'tarparser';
 import { unzipSync } from 'fflate';
+import type { TlockContainerMeta } from '../types';
 
 export interface ExtractedFile {
   name: string;
@@ -61,4 +62,45 @@ export async function extractArchive(data: Uint8Array): Promise<ExtractedFile[]>
   }
 
   throw new Error('unrecognized archive format');
+}
+
+/**
+ * Check if data is a tlock container ZIP (contains tlock.json).
+ * Uses only fflate — no tlock.js dependency.
+ */
+export function isTlockContainer(data: Uint8Array): boolean {
+  if (data.length < 4 || data[0] !== 0x50 || data[1] !== 0x4B || data[2] !== 0x03 || data[3] !== 0x04) {
+    return false;
+  }
+  try {
+    const files = unzipSync(data);
+    return 'tlock.json' in files;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open a tlock container ZIP and return the metadata and tlock-encrypted ciphertext.
+ * Uses only fflate — no tlock.js dependency.
+ */
+export function openTlockContainer(data: Uint8Array): { meta: TlockContainerMeta; ciphertext: Uint8Array } {
+  const files = unzipSync(data);
+
+  const metaData = files['tlock.json'];
+  if (!metaData) {
+    throw new Error('tlock container: missing tlock.json');
+  }
+
+  const ciphertext = files['manifest.tlock.age'];
+  if (!ciphertext) {
+    throw new Error('tlock container: missing manifest.tlock.age');
+  }
+
+  const meta: TlockContainerMeta = JSON.parse(new TextDecoder().decode(metaData));
+  if (!meta.v) {
+    throw new Error('tlock container: tlock.json missing version field');
+  }
+
+  return { meta, ciphertext };
 }

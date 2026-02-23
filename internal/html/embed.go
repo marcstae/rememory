@@ -30,6 +30,15 @@ var makerHTMLTemplate string
 //go:embed assets/create-app.js
 var createAppJS string
 
+// Tlock JavaScript (time-lock encryption/decryption using drand)
+// Split into creation (maker.html) and recovery (recover.html) bundles.
+
+//go:embed assets/tlock-create.js
+var tlockCreateJS string
+
+//go:embed assets/tlock-recover.js
+var tlockRecoverJS string
+
 // Static page templates (no WASM needed)
 
 //go:embed assets/index.html

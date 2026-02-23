@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="ReMemory {{VERSION}}">
-  <title>ReMemory - Split a secret among people you trust</title>
-  <meta name="description" content="Encrypt files and split the key among people you trust. No servers, no accounts. Recovery works offline, forever.">
+  <title>ReMemory - Protect your files with people you trust</title>
+  <meta name="description" content="Protect your files by splitting a key among people you trust. No accounts, no servers. Recovery works offline, forever.">
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="ReMemory - Split a secret among people you trust">
-  <meta property="og:description" content="Encrypt files and split the key among people you trust. No servers, no accounts. Recovery works offline, forever.">
+  <meta property="og:title" content="ReMemory - Protect your files with people you trust">
+  <meta property="og:description" content="Protect your files by splitting a key among people you trust. No accounts, no servers. Recovery works offline, forever.">
   <meta property="og:image" content="{{GITHUB_PAGES}}/screenshots/recovery-1.png">
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ReMemory - Split a secret among people you trust">
-  <meta name="twitter:description" content="Encrypt files and split the key among people you trust. No servers, no accounts. Recovery works offline, forever.">
+  <meta name="twitter:title" content="ReMemory - Protect your files with people you trust">
+  <meta name="twitter:description" content="Protect your files by splitting a key among people you trust. No accounts, no servers. Recovery works offline, forever.">
   <meta name="twitter:image" content="{{GITHUB_PAGES}}/screenshots/recovery-1.png">
   <style>{{STYLES}}</style>
   <style>
@@ -300,14 +300,14 @@
     <section class="intro">
       <h1>🧠 ReMemory</h1>
       <p class="summary">
-        ReMemory encrypts your files and splits the key among people you trust using
-        <a href="https://en.wikipedia.org/wiki/Shamir%27s_secret_sharing" target="_blank">Shamir's Secret Sharing</a>.
+        ReMemory protects your files by splitting a key among people you trust.
         You decide how many must come together to unlock them — three of five friends, two of two partners, whatever fits.
-        No single person can access anything alone.
+        No single person can access anything alone. Based on
+        <a href="https://en.wikipedia.org/wiki/Shamir%27s_secret_sharing" target="_blank">Shamir's Secret Sharing</a>.
       </p>
       <p class="summary">
-        Each person receives a self-contained bundle with everything needed to recover.
-        It works in any browser, offline, with no servers. If this website disappears, recovery still works.
+        Each person gets a bundle with everything they need to recover.
+        It works in any browser, <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span>, with no accounts or servers. If this website disappears, recovery still works.
       </p>
       <div class="links">
         <a href="maker.html">Create bundles</a>
@@ -329,9 +329,9 @@
 
       <div class="reduced-motion-fallback">
         <p class="flow-text">
-          <strong>Your File</strong> → <strong>Encrypt</strong> → <strong>Split key into 5 shares</strong> → <strong>Distribute to friends</strong><br>
+          <strong>Your File</strong> → <strong>Encrypt</strong> → <strong>Split key into 5 pieces</strong> → <strong>Distribute to friends</strong><br>
           ↓<br>
-          <strong>Any 3 friends</strong> → <strong>Combine shares</strong> → <strong>Decrypt</strong> → <strong>File recovered</strong>
+          <strong>Any 3 friends</strong> → <strong>Combine pieces</strong> → <strong>Unlock</strong> → <strong>File recovered</strong>
         </p>
       </div>
     </section>
@@ -342,7 +342,7 @@
         <div class="what-is-col is-col">
           <h3>It is:</h3>
           <ul>
-            <li>A tool that runs in your browser, offline</li>
+            <li>A tool that runs in your browser, <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span></li>
             <li>A way to split a secret key among people you trust</li>
             <li>Open source (Apache-2.0)</li>
             <li>Self-contained — recovery works without this website</li>
@@ -378,7 +378,7 @@
         <li>The code is open source — <a href="{{GITHUB_REPO}}" target="_blank">read it on GitHub</a></li>
         <li>A <a href="{{GITHUB_REPO}}/blob/main/docs/security-review.md" target="_blank">security review</a> explains the cryptographic choices</li>
         <li>Everything runs locally. Your files never leave your device</li>
-        <li>Try the demo bundles before using it with real secrets</li>
+        <li>Try the demo bundles before using it with anything important</li>
         <li>Encryption uses <a href="https://github.com/FiloSottile/age" target="_blank">age</a> — a modern, well-regarded tool</li>
         <li>Read more about <a href="docs.html#cryptography">what protects your data</a> and <a href="docs.html#what-could-go-wrong">what could go wrong</a></li>
       </ul>
@@ -401,7 +401,8 @@
     </section>
   </div>
 
-  <footer>
+  <footer id="footer">
+    <p style="font-size: 0.8125rem; color: #8A8480;">* <a href="docs.html#timelock" style="color: #8A8480;">Time-locked</a> archives need a brief internet connection at recovery time.</p>
     <p>
       <a href="{{GITHUB_REPO}}" target="_blank">Source Code</a> ·
       <a href="{{GITHUB_URL}}" target="_blank">Download CLI</a> ·

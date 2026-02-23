@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="ReMemory {{VERSION}}">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; connect-src blob:; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; connect-src {{CSP_CONNECT_SRC}}; form-action 'none';">
   <title>🧠 ReMemory - Create Recovery Bundles</title>
   <style>{{STYLES}}</style>
   <style>
@@ -120,8 +120,9 @@
     .files-preview {
       max-height: 200px;
       overflow-y: auto;
+      margin-top: 0.75rem;
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 4px 4px 0 0;
       background: var(--paper-light);
     }
     .files-preview .file-item {
@@ -166,6 +167,8 @@
     .files-summary {
       padding: 0.5rem 0.75rem;
       background: var(--sage-tint);
+      border: 1px solid var(--border);
+      border-top: none;
       border-radius: 0 0 4px 4px;
       font-size: 0.875rem;
       color: var(--text);
@@ -413,7 +416,12 @@
 
     <!-- Step 3: Generate -->
     <div class="card">
-      <h2><span class="step-number">3</span> <span data-i18n="step3_title">Generate Bundles</span></h2>
+      <h2 style="display: flex; justify-content: space-between; align-items: center;">
+        <span><span class="step-number">3</span> <span data-i18n="step3_title">Generate Bundles</span></span>
+        {{TLOCK_TABS_HTML}}
+      </h2>
+
+      {{TLOCK_PANEL_HTML}}
 
       <button id="generate-btn" class="btn btn-primary" disabled>
         <span data-i18n="generate_btn">Generate Bundles</span>
@@ -441,6 +449,7 @@
         <button id="download-yaml-btn" class="btn btn-secondary">
           <span data-i18n="download_yaml_btn">Save project.yml</span>
         </button>
+        <p class="next-steps-hint"><a href="https://eljojo.github.io/rememory/docs.html#distributing" target="_blank" data-i18n="next_steps_link">What to do next</a></p>
       </div>
     </div>
   </div>
@@ -521,6 +530,9 @@
     window.VERSION = "{{VERSION}}";
     window.GITHUB_URL = "{{GITHUB_URL}}";
   </script>
+
+  <!-- Time-lock encryption (conditionally included) -->
+  {{TLOCK_JS}}
 
   <!-- Application logic -->
   <script nonce="{{CSP_NONCE}}">{{CREATE_APP_JS}}</script>

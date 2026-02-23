@@ -24,6 +24,7 @@ type Config struct {
 	GitHubReleaseURL string // URL to GitHub release for CLI download
 	RecoveryURL      string // Optional: base URL for QR code (e.g. "https://example.com/recover.html")
 	NoEmbedManifest  bool   // If true, do not embed MANIFEST.age in recover.html even when small enough
+	TlockEnabled     bool   // If true, bundles include tlock-js for time-lock decryption
 }
 
 // GenerateAll creates bundles for all friends in the project.
@@ -90,6 +91,7 @@ func GenerateAll(p *project.Project, cfg Config) error {
 			Threshold:    p.Threshold,
 			Total:        len(p.Friends),
 			Language:     lang,
+			TlockEnabled: cfg.TlockEnabled,
 		}
 
 		// Embed manifest in recover.html when small enough and not disabled
@@ -122,6 +124,7 @@ func GenerateAll(p *project.Project, cfg Config) error {
 			Anonymous:        p.Anonymous,
 			RecoveryURL:      cfg.RecoveryURL,
 			Language:         lang,
+			TlockEnabled:     cfg.TlockEnabled,
 		})
 		if err != nil {
 			return fmt.Errorf("generating bundle for %s: %w", friend.Name, err)
@@ -156,6 +159,7 @@ type BundleParams struct {
 	Anonymous        bool
 	RecoveryURL      string
 	Language         string // Bundle language for this friend
+	TlockEnabled     bool   // true when manifest uses time-lock encryption
 }
 
 // GenerateBundle creates a single bundle ZIP file for one friend.
@@ -176,6 +180,7 @@ func GenerateBundle(params BundleParams) error {
 		Anonymous:        params.Anonymous,
 		Language:         params.Language,
 		ManifestEmbedded: params.ManifestEmbedded,
+		TlockEnabled:     params.TlockEnabled,
 	}
 
 	// Generate README.txt
@@ -198,6 +203,7 @@ func GenerateBundle(params BundleParams) error {
 		RecoveryURL:      params.RecoveryURL,
 		Language:         params.Language,
 		ManifestEmbedded: params.ManifestEmbedded,
+		TlockEnabled:     params.TlockEnabled,
 	})
 	if err != nil {
 		return fmt.Errorf("generating PDF: %w", err)

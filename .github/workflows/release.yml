@@ -40,6 +40,9 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+      - name: Test tlock integration
+        run: make test-tlock
+
       - name: Build binaries
         run: make build-all
 

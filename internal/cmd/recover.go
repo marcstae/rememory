@@ -219,6 +219,28 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decryption failed (shares may be corrupted or from different operation): %w", err)
 	}
 
+	decryptedData := decryptedBuf.Bytes()
+
+	// Check for tlock container (time-lock encrypted archive)
+	if core.IsTlockContainer(decryptedData) {
+		meta, tlockCiphertext, err := core.OpenTlockContainer(decryptedData)
+		if err != nil {
+			return fmt.Errorf("reading tlock container: %w", err)
+		}
+
+		unlockTime, _ := meta.UnlockTime()
+		if time.Now().Before(unlockTime) {
+			return fmt.Errorf("this archive is time-locked until %s — try again after that date", unlockTime.Format("2006-01-02 15:04"))
+		}
+
+		fmt.Println("Opening time lock...")
+		var tlockBuf bytes.Buffer
+		if err := core.TlockDecrypt(&tlockBuf, bytes.NewReader(tlockCiphertext)); err != nil {
+			return fmt.Errorf("time-lock decryption failed (may need internet connection): %w", err)
+		}
+		decryptedData = tlockBuf.Bytes()
+	}
+
 	// Determine output directory
 	outputDir := recoverOutput
 	if outputDir == "" {
@@ -226,7 +248,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	}
 
 	// Extract archive (auto-detects ZIP or tar.gz)
-	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decryptedBuf.Bytes()), outputDir)
+	extractResult, err := manifest.ExtractAuto(bytes.NewReader(decryptedData), outputDir)
 	if err != nil {
 		return fmt.Errorf("extracting manifest: %w", err)
 	}

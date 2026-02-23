@@ -63,5 +63,22 @@
   "threshold_guidance": "Premislite, kdo bo v primeru obnovitve podatkov dosegljiv hkrati. Nižje število je bolj prizanesljivo, če kdo ni na voljo.",
   "nav_about": "O projektu",
   "nav_guide": "Vodič",
-  "nav_recover": "Obnovitev"
+  "nav_recover": "Obnovitev",
+  "mode_simple": "Preprosto",
+  "mode_advanced": "Napredno",
+  "timelock_label": "Dodaj časovno zaklepanje",
+  "timelock_experimental": "eksperimentalno",
+  "timelock_hint": "Tudi z zadostnim številom delov datoteke ostanejo zaklenjene do tega datuma.",
+  "timelock_learn_more": "Kako to deluje?",
+  "timelock_value_label": "Zakleni za:",
+  "timelock_minutes": "minut",
+  "timelock_hours": "ur",
+  "timelock_days": "dni",
+  "timelock_weeks": "tednov",
+  "timelock_months": "mesecev",
+  "timelock_years": "let",
+  "timelock_preview": "Odpre se po {0}",
+  "timelock_network_hint": "Obnovitev bo potrebovala kratko internetno povezavo za preverjanje časovnega zaklepanja.",
+  "timelock_encrypting": "Izvajanje časovnega zaklepanja...",
+  "next_steps_link": "Naslednji koraki"
 }

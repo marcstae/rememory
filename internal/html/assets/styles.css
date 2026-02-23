@@ -333,6 +333,13 @@ input[type="file"] {
   color: var(--sage);
 }
 
+.status-subtitle {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
 .files-list {
   text-align: left;
   margin: 1rem 0;
@@ -368,6 +375,23 @@ input[type="file"] {
   display: flex;
   gap: 1rem;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.next-steps-hint {
+  width: 100%;
+  text-align: center;
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.next-steps-hint a {
+  color: var(--dusty-blue);
+}
+
+.next-steps-hint a:hover {
+  color: var(--dusty-blue-dark);
 }
 
 footer {

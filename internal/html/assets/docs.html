@@ -423,6 +423,8 @@
           <li><a href="#cli">CLI Alternative</a></li>
           <li><a href="#anonymous">Anonymous Mode</a></li>
           <li><a href="#multilingual">Multilingual Bundles</a></li>
+          <li><a href="#timelock">Time-Delayed Recovery</a></li>
+          <li class="indent"><a href="#timelock-technical">How It Works</a></li>
         </ul>
       </nav>
     </aside>
@@ -447,11 +449,12 @@
         <li>Giving each person a self-contained bundle for recovery</li>
       </ol>
       <p>
-        Recovery works entirely offline, in a browser. No servers, no internet, no need for this website to exist.
+        Recovery works entirely offline, in a browser.* No servers, no need for this website to exist.
       </p>
+      <p style="font-size: 0.8125rem; color: #8A8480;">* <a href="#timelock" style="color: #8A8480;">Time-locked</a> archives need a brief internet connection at recovery time.</p>
 
       <div class="tip">
-        <strong>Tip:</strong> No single person can access your data. They must combine their pieces — enough to reach the threshold you set (e.g., 3 of 5).
+        <strong>Tip:</strong> No one person can access your data. They need to bring together enough pieces — say, 3 of 5.
       </div>
     </section>
 
@@ -464,7 +467,7 @@
         Think of it like a safe deposit box that needs two keys to open — no single person holds enough to get in alone.
       </p>
       <p>
-        Traditional approaches have real weaknesses:
+        Traditional approaches have weaknesses:
       </p>
       <ul>
         <li><strong>Give one person everything</strong> — a single point of failure and trust</li>
@@ -478,7 +481,7 @@
       <ul>
         <li><strong>No single point of failure</strong> — requires multiple people to cooperate</li>
         <li><strong>No trust in any one person</strong> — even your most trusted friend can't access your secrets alone</li>
-        <li><strong>Offline and self-contained</strong> — recovery works without internet or servers</li>
+        <li><strong>Offline and self-contained</strong> — recovery works without internet or servers*</li>
         <li><strong>Designed for anyone</strong> — clear instructions, not cryptographic puzzles</li>
       </ul>
     </section>
@@ -548,8 +551,7 @@
       </figure>
 
       <p>
-        Each bundle includes the full recovery tool, so it works even without this website.
-        Recovery works even if this website is gone.
+        Each bundle includes the full recovery tool. It works even if this website is gone.
       </p>
 
       <h3 id="distributing">Distributing to Friends</h3>
@@ -587,15 +589,15 @@
       <div class="bundle-contents">
         <div class="file">
           <span class="file-name">README.txt</span>
-          <span class="file-desc">Instructions, unique share, contact list</span>
+          <span class="file-desc">Instructions, your unique piece, contact list</span>
         </div>
         <div class="file">
           <span class="file-name">README.pdf</span>
-          <span class="file-desc">Same content, formatted for printing. Includes a <strong>QR code</strong> for importing the share.</span>
+          <span class="file-desc">Same content, formatted for printing. Includes a <strong>QR code</strong> for importing the piece.</span>
         </div>
         <div class="file">
           <span class="file-name">MANIFEST.age</span>
-          <span class="file-desc">Your encrypted files. Only included separately when data exceeds 10 MB.</span>
+          <span class="file-desc">Your encrypted files. Included as a separate file for larger archives.</span>
         </div>
         <div class="file">
           <span class="file-name">recover.html</span>
@@ -632,7 +634,7 @@
         <div class="step-number">3</div>
         <div class="step-content">
           <h4>Coordinate with other friends</h4>
-          <p>The tool shows a contact list with other friends' names and how to reach them. Ask them to send their <code>README.txt</code> or share text.</p>
+          <p>The tool shows a contact list with other friends' names and how to reach them. Ask them to send their <code>README.txt</code>.</p>
         </div>
       </div>
 
@@ -640,7 +642,7 @@
         <div class="step-number">4</div>
         <div class="step-content">
           <h4>Add shares from other friends</h4>
-          <p>For each friend's share: drag their <code>README.txt</code> onto the page, paste the share text, or scan a QR code from their PDF. A checkmark appears as each share is added.</p>
+          <p>For each friend's piece: drag their <code>README.txt</code> onto the page, paste the text, or scan a QR code from their PDF. A checkmark appears as each piece is added.</p>
         </div>
       </div>
 
@@ -648,12 +650,12 @@
         <div class="step-number">5</div>
         <div class="step-content">
           <h4>Recovery happens automatically</h4>
-          <p>Once enough shares are gathered (e.g., 3 of 5), decryption starts on its own.</p>
+          <p>Once enough pieces are gathered (e.g., 3 of 5), recovery starts on its own.</p>
         </div>
       </div>
 
       <div class="tip">
-        <strong>Tip:</strong> If a friend sends their entire <code>.zip</code> bundle, drag it onto the page — both the share and the archive are imported at once.
+        <strong>Tip:</strong> If a friend sends their entire <code>.zip</code> bundle, drag it onto the page — both the piece and the archive are imported at once.
       </div>
 
       <figure class="screenshot">
@@ -709,7 +711,7 @@
         <div class="step-number">4</div>
         <div class="step-content">
           <h4>Collect shares from other friends</h4>
-          <p>Contact other friends and ask for their shares. They can send their <code>README.txt</code>, share text, read their words over the phone, or you can scan their QR code.</p>
+          <p>Contact other friends and ask for their pieces. They can send their <code>README.txt</code>, read their words over the phone, or you can scan their QR code.</p>
         </div>
       </div>
 
@@ -765,7 +767,7 @@
         <div class="step-number">3</div>
         <div class="step-content">
           <h4>Collect shares from other friends</h4>
-          <p>Contact other friends and ask for their shares. They can send their <code>README.txt</code>, share text, or you can scan their QR code.</p>
+          <p>Contact other friends and ask for their pieces. They can send their <code>README.txt</code>, or you can scan their QR code.</p>
         </div>
       </div>
 
@@ -780,9 +782,9 @@
       <div class="tip">
         <strong>About recovery:</strong>
         <ul>
-          <li>Works entirely offline</li>
+          <li>Works entirely <span title="No internet needed. Time-locked archives need a connection to verify the unlock date.">offline*</span></li>
           <li>Nothing leaves the browser</li>
-          <li>Friends can be anywhere — they just need to share their README.txt files</li>
+          <li>Friends can be anywhere — they just need to send their README.txt files</li>
         </ul>
       </div>
     </section>
@@ -850,7 +852,7 @@
       </ol>
 
       <div class="warning">
-        <strong>Important:</strong> Old pieces still work with old archives. When you send a new bundle, be clear: delete the old one, keep only the new one. No version history, no "just in case."
+        <strong>Important:</strong> Old pieces still work with old archives. When you send a new bundle, be clear: <strong>delete the old one</strong>, keep only the new one. No version history, no "just in case."
       </div>
 
       <p>
@@ -940,7 +942,7 @@
       </p>
       <ul>
         <li><strong>Handles files, not just text.</strong> Most Shamir tools only split passwords or short text. ReMemory encrypts entire files and folders.</li>
-        <li><strong>Self-contained recovery tool.</strong> Each friend receives <code>recover.html</code> — a complete recovery tool that runs in any browser, offline. No installation, no CLI, no internet needed.</li>
+        <li><strong>Self-contained recovery tool.</strong> Each friend receives <code>recover.html</code> — a complete recovery tool that runs in any browser, offline.* No installation, no CLI needed.</li>
         <li><strong>Contact details included.</strong> Each bundle includes a list of other friends and how to reach them, so coordination doesn't depend on you being available.</li>
         <li><strong>No server dependency.</strong> Everything runs locally. There's no service to sign up for, no account to maintain, nothing that needs to stay online.</li>
       </ul>
@@ -1034,6 +1036,37 @@
         <img src="screenshots/demo-pdf-es/page-2.png" alt="recover.pdf opened in Spanish" onerror="this.parentElement.innerHTML='<div class=\'screenshot-placeholder\'><div class=\'icon\'>📸</div>Screenshot: recover.html opened in a non-English language (e.g. Spanish)</div>'">
         <figcaption>Word lists are translated too (both languages work)</figcaption>
       </figure>
+    </section>
+
+    <section id="timelock" class="doc-section">
+      <h2>Advanced: Time-Delayed Recovery</h2>
+      <p>
+        You can set a waiting period when creating bundles. Even if your friends combine their pieces early, the files stay locked until the date you chose — 30 days, 6 months, a specific date.
+      </p>
+
+      <h3>How to Enable</h3>
+      <p>
+        In the <a href="maker.html">bundle creator</a>, switch to <strong>Advanced</strong> mode and check <strong>Add a time lock</strong>. Choose how long the files should stay locked.
+      </p>
+      <h3>Recovery</h3>
+      <p>
+        When someone opens a time-locked bundle before the date, the recovery tool shows a waiting notice. Once the time passes, recovery proceeds normally.
+      </p>
+      <p>
+        Opening a time-locked archive requires a brief internet connection. Your files aren't sent anywhere — the connection verifies that enough time has passed. Without the time lock, recovery is fully offline.
+      </p>
+
+      <div class="warning">
+        <strong>Experimental.</strong> Time-delayed recovery depends on the <a href="https://www.cloudflare.com/en-ca/leagueofentropy/" target="_blank">League of Entropy</a>, a distributed network operated by serious organizations around the world. If this network stops operating before a time lock expires, that archive becomes unrecoverable. Bundles without a time lock are not affected.
+      </div>
+
+      <h3 id="timelock-technical">How It Works</h3>
+      <p>
+        The League of Entropy produces a new cryptographic value every 3 seconds. Each value is numbered. You can predict which number corresponds to a given time, but the value for that number can't be produced early — not by anyone, including the network operators.
+      </p>
+      <p>
+        When you create a time-locked bundle, the archive is encrypted to a specific future value. The key to open it doesn't exist yet. It will come from the network when that moment arrives.
+      </p>
     </section>
 
     <footer class="docs-footer">

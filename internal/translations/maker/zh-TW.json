@@ -63,5 +63,22 @@
   "threshold_guidance": "想想誰可能同時有空。門檻越低，在有人無法參與時越有彈性。",
   "nav_about": "關於",
   "nav_guide": "指南",
-  "nav_recover": "復原"
+  "nav_recover": "復原",
+  "mode_simple": "簡易",
+  "mode_advanced": "進階",
+  "timelock_label": "加入時間鎖",
+  "timelock_experimental": "實驗性",
+  "timelock_hint": "即使收集到足夠的碎片，檔案在此日期之前仍然無法開啟。",
+  "timelock_learn_more": "這是如何運作的？",
+  "timelock_value_label": "鎖定期間：",
+  "timelock_minutes": "分鐘",
+  "timelock_hours": "小時",
+  "timelock_days": "天",
+  "timelock_weeks": "週",
+  "timelock_months": "個月",
+  "timelock_years": "年",
+  "timelock_preview": "{0} 之後可開啟",
+  "timelock_network_hint": "復原時需要短暫的網路連線來驗證時間鎖。",
+  "timelock_encrypting": "正在套用時間鎖...",
+  "next_steps_link": "接下來該做什麼"
 }

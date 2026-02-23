@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="ReMemory {{VERSION}}">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; connect-src blob:; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-{{CSP_NONCE}}' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src blob: data:; connect-src {{CSP_CONNECT_SRC}}; form-action 'none';">
   <title>ReMemory Recovery Tool</title>
   <style>{{STYLES}}</style>
 </head>
@@ -102,6 +102,9 @@
     <!-- Step 3: Recover -->
     <div class="card">
       <h2><span class="step-number">3</span> <span data-i18n="step3_title">Recover the files</span></h2>
+
+      {{TLOCK_WAITING_HTML}}
+
       <div id="recover-section" class="recover-section">
         <button id="recover-btn" class="btn btn-primary" disabled>
           <span>&#128275;</span> <span data-i18n="decrypt_btn">Unlock & Recover</span>
@@ -125,7 +128,7 @@
   </div>
 
   <footer>
-    <p>ReMemory {{VERSION}} &mdash; <span data-i18n="works_offline">Works fully offline</span></p>
+    <p>ReMemory {{VERSION}}</p>
     <p>
       <span data-i18n="need_help">Need help?</span>
       <a href="{{GITHUB_PAGES}}/docs#recovering" target="_blank">Docs</a> ·
@@ -209,6 +212,9 @@
     window.PERSONALIZATION = {{PERSONALIZATION_DATA}};
     window.README_NAMES = {{README_NAMES}};
   </script>
+
+  <!-- Time-lock decryption (conditionally included when tlock is needed) -->
+  {{TLOCK_JS}}
 
   <!-- Application logic (native JavaScript crypto, no WASM) -->
   <script nonce="{{CSP_NONCE}}">{{APP_JS}}</script>

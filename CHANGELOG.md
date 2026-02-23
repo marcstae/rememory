@@ -4,6 +4,8 @@ All notable changes to ReMemory are documented here.
 
 ## Unreleased
 
+- **Time-delayed recovery** — You can now set a waiting period when creating bundles. Even if your friends combine their pieces early, the files stay locked until the date you chose. Uses the [League of Entropy](https://www.cloudflare.com/en-ca/leagueofentropy/) — a distributed randomness beacon run by organizations around the world, not a single company. This is experimental: recovery requires a brief internet connection, and relies on the beacon continuing to operate. CLI: `rememory seal --timelock 30d`. Also available in the web maker under "Advanced options."
+
 ## v0.0.15 — 2026-02-21
 
 - **ZIP archive format** — Encrypted payloads now use ZIP instead of tar.gz. ZIP is understood by every operating system without extra tools, which makes manual inspection easier if someone ever needs it. Existing bundles created with earlier versions still work — the recovery tool detects the format automatically.

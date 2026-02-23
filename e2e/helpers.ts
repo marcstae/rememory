@@ -12,11 +12,11 @@ export function getRememoryBin(): string {
 }
 
 // Generate standalone HTML file for testing
-export function generateStandaloneHTML(tmpDir: string, type: 'recover' | 'create'): string {
+export function generateStandaloneHTML(tmpDir: string, type: 'recover' | 'create', extraFlags: string[] = []): string {
   const bin = getRememoryBin();
   const htmlPath = path.join(tmpDir, type === 'create' ? 'maker.html' : 'recover.html');
 
-  execFileSync(bin, ['html', type, '-o', htmlPath], { stdio: 'inherit' });
+  execFileSync(bin, ['html', type, '-o', htmlPath, ...extraFlags], { stdio: 'inherit' });
 
   return htmlPath;
 }
@@ -308,7 +308,7 @@ export class RecoveryPage {
   }
 
   async expectRecoveryComplete(): Promise<void> {
-    await expect(this.page.locator('#status-message')).toContainText('recovered', { timeout: 60000 });
+    await expect(this.page.locator('#status-message')).toContainText('files are ready', { timeout: 60000 });
   }
 
   async expectFileCount(count: number): Promise<void> {

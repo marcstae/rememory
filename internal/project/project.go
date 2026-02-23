@@ -36,6 +36,9 @@ type Sealed struct {
 	ManifestChecksum string      `yaml:"manifest_checksum"`
 	VerificationHash string      `yaml:"verification_hash"`
 	Shares           []ShareInfo `yaml:"shares"`
+	TlockEnabled     bool        `yaml:"tlock_enabled,omitempty"`
+	TlockRound       uint64      `yaml:"tlock_round,omitempty"`
+	TlockUnlockTime  *time.Time  `yaml:"tlock_unlock_time,omitempty"`
 }
 
 // Project represents a rememory project configuration.

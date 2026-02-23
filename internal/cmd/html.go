@@ -37,6 +37,7 @@ var htmlOutputFile string
 
 func init() {
 	htmlCmd.Flags().StringVarP(&htmlOutputFile, "output", "o", "", "Output file path (default: stdout)")
+	htmlCmd.Flags().Bool("no-timelock", false, "Omit time-lock support")
 	rootCmd.AddCommand(htmlCmd)
 }
 
@@ -64,7 +65,8 @@ func runHTML(cmd *cobra.Command, args []string) error {
 	case "recover":
 		// Generate generic recover.html (without personalization)
 		// Uses native JavaScript crypto (no WASM)
-		content = html.GenerateRecoverHTML(version, githubURL, nil)
+		noTlock, _ := cmd.Flags().GetBool("no-timelock")
+		content = html.GenerateRecoverHTML(version, githubURL, nil, html.RecoverHTMLOptions{NoTlock: noTlock})
 
 	case "create":
 		// Generate maker.html (bundle creation tool)
@@ -73,7 +75,8 @@ func runHTML(cmd *cobra.Command, args []string) error {
 		if len(createWASM) == 0 {
 			return fmt.Errorf("create.wasm not embedded - rebuild with 'make build'")
 		}
-		content = html.GenerateMakerHTML(createWASM, version, githubURL)
+		noTlock, _ := cmd.Flags().GetBool("no-timelock")
+		content = html.GenerateMakerHTML(createWASM, version, githubURL, noTlock)
 
 	default:
 		return fmt.Errorf("unknown subcommand: %s (use 'index', 'create', 'docs', or 'recover')", subcommand)

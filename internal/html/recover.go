@@ -5,6 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/eljojo/rememory/internal/core"
@@ -25,13 +27,71 @@ const MaxEmbeddedManifestSize = 10 << 20 // 10 MiB
 
 // PersonalizationData holds the data to personalize recover.html for a specific friend.
 type PersonalizationData struct {
-	Holder       string       `json:"holder"`                // This friend's name
-	HolderShare  string       `json:"holderShare"`           // This friend's encoded share
-	OtherFriends []FriendInfo `json:"otherFriends"`          // List of other friends
-	Threshold    int          `json:"threshold"`             // Required shares (K)
-	Total        int          `json:"total"`                 // Total shares (N)
-	Language     string       `json:"language,omitempty"`    // Default UI language for this friend
-	ManifestB64  string       `json:"manifestB64,omitempty"` // Base64-encoded MANIFEST.age (when <= MaxEmbeddedManifestSize)
+	Holder       string       `json:"holder"`                 // This friend's name
+	HolderShare  string       `json:"holderShare"`            // This friend's encoded share
+	OtherFriends []FriendInfo `json:"otherFriends"`           // List of other friends
+	Threshold    int          `json:"threshold"`              // Required shares (K)
+	Total        int          `json:"total"`                  // Total shares (N)
+	Language     string       `json:"language,omitempty"`     // Default UI language for this friend
+	ManifestB64  string       `json:"manifestB64,omitempty"`  // Base64-encoded MANIFEST.age (when <= MaxEmbeddedManifestSize)
+	TlockEnabled bool         `json:"tlockEnabled,omitempty"` // Signals tlock-js should be included
+}
+
+// tlockWaitingHTML is the time-lock waiting UI injected into recover.html.
+// Includes inline CSS so the styles are zero-trace when tlock is disabled.
+const tlockWaitingHTML = `<style>
+.tlock-waiting {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--sage-tint);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+.tlock-waiting-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tlock-waiting-body {
+  flex: 1;
+}
+.tlock-waiting-body strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+.tlock-waiting-body p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.tlock-waiting-hint {
+  color: var(--text-muted) !important;
+  font-size: 0.8125rem !important;
+}
+.tlock-waiting-hint a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.tlock-waiting-hint a:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+</style>
+      <div id="tlock-waiting" class="tlock-waiting hidden" aria-live="polite">
+        <div class="tlock-waiting-icon">&#128336;</div>
+        <div class="tlock-waiting-body">
+          <strong id="tlock-waiting-title" data-i18n="tlock_waiting_title">Time lock active</strong>
+          <p id="tlock-waiting-date"></p>
+          <p class="tlock-waiting-hint"><a href="{{GITHUB_PAGES}}/docs#timelock" target="_blank" data-i18n="tlock_learn_more">What is this?</a></p>
+        </div>
+      </div>`
+
+// RecoverHTMLOptions holds optional parameters for GenerateRecoverHTML.
+type RecoverHTMLOptions struct {
+	NoTlock bool // Omit tlock-js even from generic recover.html
 }
 
 // GenerateRecoverHTML creates the complete recover.html with all assets embedded.
@@ -39,7 +99,7 @@ type PersonalizationData struct {
 // version is the rememory version string.
 // githubURL is the URL to download CLI binaries.
 // personalization can be nil for a generic recover.html, or provided to personalize for a specific friend.
-func GenerateRecoverHTML(version, githubURL string, personalization *PersonalizationData) string {
+func GenerateRecoverHTML(version, githubURL string, personalization *PersonalizationData, opts ...RecoverHTMLOptions) string {
 	html := recoverHTMLTemplate
 
 	// Embed translations
@@ -58,6 +118,32 @@ func GenerateRecoverHTML(version, githubURL string, personalization *Personaliza
 
 	// Embed shared.js + app.js (native crypto bundled in app.js)
 	html = strings.Replace(html, "{{APP_JS}}", sharedJS+"\n"+appJS, 1)
+
+	// Include tlock.js when needed:
+	// - Generic/standalone recover.html (personalization == nil): always include so
+	//   GitHub Pages can handle tlock manifests
+	// - Personalized tlock bundle: include for time-lock decryption
+	// - Personalized non-tlock bundle: omit to keep size small
+	var noTlock bool
+	if len(opts) > 0 {
+		noTlock = opts[0].NoTlock
+	}
+	// If personalization requires tlock, always include it regardless of noTlock
+	if noTlock && personalization != nil && personalization.TlockEnabled {
+		fmt.Fprintf(os.Stderr, "Warning: --no-timelock ignored for tlock-enabled bundle\n")
+		noTlock = false
+	}
+	includeTlock := !noTlock && (personalization == nil || personalization.TlockEnabled)
+	if includeTlock {
+		html = strings.Replace(html, "{{TLOCK_JS}}",
+			drandConfigScript()+`<script nonce="{{CSP_NONCE}}">`+tlockRecoverJS+`</script>`, 1)
+		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", drandCSPConnectSrc(), 1)
+		html = strings.Replace(html, "{{TLOCK_WAITING_HTML}}", tlockWaitingHTML, 1)
+	} else {
+		html = strings.Replace(html, "{{TLOCK_JS}}", "", 1)
+		html = strings.Replace(html, "{{CSP_CONNECT_SRC}}", "blob:", 1)
+		html = strings.Replace(html, "{{TLOCK_WAITING_HTML}}", "", 1)
+	}
 
 	// Replace version and GitHub URLs
 	html = strings.Replace(html, "{{VERSION}}", version, -1)

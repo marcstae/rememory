@@ -207,17 +207,11 @@ func TestGetStringBasic(t *testing.T) {
 }
 
 func TestGetStringSameKeyDifferentComponents(t *testing.T) {
-	// "works_offline" has different values per component
-	recover := GetString("recover", "en", "works_offline")
-	maker := GetString("maker", "en", "works_offline")
+	// "step1_title" exists in both components with different values
+	recover := GetString("recover", "en", "step1_title")
+	maker := GetString("maker", "en", "step1_title")
 	if recover == maker {
-		t.Errorf("same key 'works_offline' should have different values per component, both got %q", recover)
-	}
-	if recover != "Works fully offline" {
-		t.Errorf("recover works_offline = %q, want %q", recover, "Works fully offline")
-	}
-	if maker != "Works completely offline" {
-		t.Errorf("maker works_offline = %q, want %q", maker, "Works completely offline")
+		t.Errorf("same key 'step1_title' should differ per component, both got %q", recover)
 	}
 }
 

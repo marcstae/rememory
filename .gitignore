@@ -4,6 +4,8 @@
 /internal/html/assets/app.js
 /internal/html/assets/create-app.js
 /internal/html/assets/shared.js
+/internal/html/assets/tlock-create.js
+/internal/html/assets/tlock-recover.js
 /node_modules/
 /e2e/playwright-report/
 /test-results/

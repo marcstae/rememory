@@ -28,6 +28,7 @@ type ReadmeData struct {
 	Anonymous        bool
 	Language         string // Bundle language (e.g. "en", "es"); defaults to "en"
 	ManifestEmbedded bool   // true when manifest is embedded in recover.html
+	TlockEnabled     bool   // true when manifest uses time-lock encryption
 }
 
 // writeWordGrid writes a two-column word grid to the string builder.
@@ -135,7 +136,11 @@ func GenerateReadme(data ReadmeData) string {
 		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step5_auto", data.Threshold)))
 		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_step6")))
 	}
-	sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_offline")))
+	if data.TlockEnabled {
+		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_offline_tlock")))
+	} else {
+		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_offline")))
+	}
 
 	// Fallback method - CLI
 	sb.WriteString("--------------------------------------------------------------------------------\n")

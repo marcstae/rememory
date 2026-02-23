@@ -9,7 +9,7 @@ import type {
   PersonalizationData,
   FriendInfo,
   ToastAction,
-  TranslationFunction
+  TranslationFunction,
 } from './types';
 
 // Native crypto imports
@@ -23,6 +23,8 @@ import {
   bytesToBase64,
   decrypt,
   extractArchive,
+  isTlockContainer,
+  openTlockContainer,
   extractBundle,
   extractPersonalizationFromHTML,
   decodeShareWords,
@@ -60,6 +62,9 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     recoveryComplete: false
   };
 
+  // Tlock container bytes (saved after age-decrypt for failsafe download if tlock fails)
+  let tlockContainerData: Uint8Array | null = null;
+
   // DOM elements interface
   interface Elements {
     shareDropZone: HTMLElement | null;
@@ -88,6 +93,8 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     qrScannerModal: HTMLElement | null;
     qrVideo: HTMLVideoElement | null;
     qrScannerClose: HTMLButtonElement | null;
+    tlockWaiting: HTMLElement | null;
+    tlockWaitingDate: HTMLElement | null;
   }
 
   // DOM elements
@@ -118,6 +125,8 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     qrScannerModal: document.getElementById('qr-scanner-modal'),
     qrVideo: document.getElementById('qr-video') as HTMLVideoElement | null,
     qrScannerClose: document.getElementById('qr-scanner-close') as HTMLButtonElement | null,
+    tlockWaiting: document.getElementById('tlock-waiting'),
+    tlockWaitingDate: document.getElementById('tlock-waiting-date'),
   };
 
   // Personalization data (embedded in HTML)
@@ -1057,6 +1066,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
   function clearManifest(): void {
     state.manifest = null;
+    hideTlockWaiting();
     elements.manifestStatus?.classList.add('hidden');
     elements.manifestStatus?.classList.remove('loaded');
     elements.manifestDropZone?.classList.remove('hidden');
@@ -1084,6 +1094,31 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
     if (ready && !state.recovering && !state.recoveryComplete) {
       startRecovery();
+    }
+  }
+
+  function showTlockWaiting(unlockDate: Date): void {
+    if (!elements.tlockWaiting) return;
+
+    if (elements.tlockWaitingDate) {
+      const fmt = window.rememoryTlock?.formatUnlockDate
+        ? window.rememoryTlock.formatUnlockDate(unlockDate, t)
+        : { text: unlockDate.toLocaleDateString(), relative: false };
+      elements.tlockWaitingDate.textContent = fmt.relative
+        ? t('tlock_waiting_message_relative', fmt.text)
+        : t('tlock_waiting_message', fmt.text);
+    }
+    elements.tlockWaiting.classList.remove('hidden');
+    if (elements.recoverBtn) elements.recoverBtn.classList.add('hidden');
+    elements.progressBar?.classList.add('hidden');
+    if (elements.statusMessage) elements.statusMessage.textContent = '';
+  }
+
+  function hideTlockWaiting(): void {
+    window.rememoryTlock?.stopWaiting?.();
+    elements.tlockWaiting?.classList.add('hidden');
+    if (elements.recoverBtn && !state.recoveryComplete) {
+      elements.recoverBtn.classList.remove('hidden');
     }
   }
 
@@ -1120,62 +1155,175 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
       setProgress(30);
 
+      // age-decrypt (always a plain age file now)
       setStatus(t('decrypting'));
-      const decrypted = await decrypt(state.manifest!, passphrase);
+      let archive = await decrypt(state.manifest!, passphrase);
 
-      setProgress(60);
+      setProgress(50);
 
-      state.decryptedArchive = decrypted;
+      // Check for tlock container (post-decryption)
+      if (isTlockContainer(archive)) {
+        if (!window.rememoryTlock?.decrypt) {
+          toast.error(t('error_title'), t('tlock_no_support'));
+          throw new Error('Time-lock decryption not available');
+        }
 
-      setStatus(t('reading'));
-      const files = await extractArchive(decrypted);
+        // Save container for failsafe download if tlock decrypt fails
+        tlockContainerData = archive;
 
-      setProgress(90);
+        const { meta, ciphertext } = openTlockContainer(archive);
+        const unlockDate = new Date(meta.unlock);
 
-      files.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'file-item';
-        item.innerHTML = `
-          <span class="icon">&#128196;</span>
-          <span class="name">${escapeHtml(file.name)}</span>
-          <span class="size">${formatSize(file.data.length)}</span>
-        `;
-        elements.filesList?.appendChild(item);
-      });
+        if (unlockDate > new Date()) {
+          // Time lock hasn't passed — show waiting UI and start polling
+          showTlockWaiting(unlockDate);
+          window.rememoryTlock.waitAndDecrypt!(
+            meta,
+            ciphertext,
+            (date) => showTlockWaiting(date),
+            async (decryptedArchive) => {
+              hideTlockWaiting();
+              tlockContainerData = null;
+              state.recovering = true;
+              elements.progressBar?.classList.remove('hidden');
+              try {
+                setProgress(60);
+                await finishRecovery(decryptedArchive);
+              } catch (err) {
+                handleRecoveryError(err);
+              } finally {
+                state.recovering = false;
+                if (elements.recoverBtn) elements.recoverBtn.disabled = false;
+              }
+            },
+            (err) => {
+              hideTlockWaiting();
+              handleTlockError(err);
+            },
+          );
+          state.recovering = false;
+          return;
+        }
 
-      setProgress(100);
-      setStatus(t('complete', files.length), 'success');
-      elements.downloadActions?.classList.remove('hidden');
-      elements.recoverBtn?.classList.add('hidden');
-      state.recoveryComplete = true;
-
-    } catch (err) {
-      const errorMsg = (err instanceof Error) ? err.message : String(err);
-
-      if (errorMsg.includes('decrypt') || errorMsg.includes('passphrase') || errorMsg.includes('incorrect')) {
-        errorHandlers.decryptionFailed(err);
-        setStatus(t('error_decrypt_status'), 'error');
-      } else if (errorMsg.includes('extract') || errorMsg.includes('tar') || errorMsg.includes('gzip')) {
-        errorHandlers.extractionFailed(err);
-        setStatus(t('error_extract_status'), 'error');
-      } else {
-        toast.error(
-          t('error_recovery_title'),
-          errorMsg,
-          t('error_recovery_guidance'),
-          [
-            { id: 'retry', label: t('action_try_again'), primary: true, onClick: () => startRecovery() }
-          ]
-        );
-        setStatus(t('error', errorMsg), 'error');
+        // Time lock passed — decrypt now
+        setStatus(t('tlock_decrypting'));
+        try {
+          archive = await window.rememoryTlock.decrypt(ciphertext);
+          tlockContainerData = null;
+        } catch (tlockErr) {
+          handleTlockError(tlockErr);
+          return;
+        }
       }
 
-      elements.step1Card?.classList.remove('collapsed');
-      elements.step2Card?.classList.remove('collapsed');
+      setProgress(60);
+      await finishRecovery(archive);
+
+    } catch (err) {
+      handleRecoveryError(err);
     } finally {
       state.recovering = false;
       if (elements.recoverBtn) elements.recoverBtn.disabled = false;
     }
+  }
+
+  async function finishRecovery(archive: Uint8Array): Promise<void> {
+    state.decryptedArchive = archive;
+
+    setStatus(t('reading'));
+    const files = await extractArchive(archive);
+
+    setProgress(90);
+
+    files.forEach(file => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `
+        <span class="icon">&#128196;</span>
+        <span class="name">${escapeHtml(file.name)}</span>
+        <span class="size">${formatSize(file.data.length)}</span>
+      `;
+      elements.filesList?.appendChild(item);
+    });
+
+    setProgress(100);
+    setStatus(t('complete'), 'success', t('complete_subtitle'));
+    elements.downloadActions?.classList.remove('hidden');
+    elements.recoverBtn?.classList.add('hidden');
+    state.recoveryComplete = true;
+
+    // Update step 3 heading
+    const cards = document.querySelectorAll('.card');
+    const step3Title = cards[2]?.querySelector('[data-i18n="step3_title"]');
+    if (step3Title) step3Title.textContent = t('step3_complete_title');
+  }
+
+  function handleRecoveryError(err: unknown): void {
+    const errorMsg = (err instanceof Error) ? err.message : String(err);
+
+    if (errorMsg.includes('decrypt') || errorMsg.includes('passphrase') || errorMsg.includes('incorrect')) {
+      errorHandlers.decryptionFailed(err);
+      setStatus(t('error_decrypt_status'), 'error');
+    } else if (errorMsg.includes('extract') || errorMsg.includes('tar') || errorMsg.includes('gzip')) {
+      errorHandlers.extractionFailed(err);
+      setStatus(t('error_extract_status'), 'error');
+    } else {
+      toast.error(
+        t('error_recovery_title'),
+        errorMsg,
+        t('error_recovery_guidance'),
+        [
+          { id: 'retry', label: t('action_try_again'), primary: true, onClick: () => startRecovery() }
+        ]
+      );
+      setStatus(t('error', errorMsg), 'error');
+    }
+
+    elements.step1Card?.classList.remove('collapsed');
+    elements.step2Card?.classList.remove('collapsed');
+  }
+
+  function handleTlockError(_err: unknown): void {
+    const actions: ToastAction[] = [];
+
+    if (tlockContainerData) {
+      actions.push({
+        id: 'download-tlock',
+        label: t('tlock_download_archive'),
+        primary: true,
+        onClick: () => downloadTlockContainer(),
+      });
+    }
+    actions.push({
+      id: 'retry',
+      label: t('action_try_again'),
+      primary: !tlockContainerData,
+      onClick: () => startRecovery(),
+    });
+
+    toast.error(
+      t('tlock_error_title'),
+      t('tlock_error_message'),
+      t('tlock_error_guidance'),
+      actions,
+    );
+    setStatus(t('tlock_error_status'), 'error');
+
+    state.recovering = false;
+    if (elements.recoverBtn) elements.recoverBtn.disabled = false;
+    elements.step1Card?.classList.remove('collapsed');
+    elements.step2Card?.classList.remove('collapsed');
+  }
+
+  function downloadTlockContainer(): void {
+    if (!tlockContainerData) return;
+    const blob = new Blob([tlockContainerData as BlobPart], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'MANIFEST.tlock.zip';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function setProgress(percent: number): void {
@@ -1185,10 +1333,16 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     }
   }
 
-  function setStatus(msg: string, type?: string): void {
+  function setStatus(msg: string, type?: string, subtitle?: string): void {
     if (elements.statusMessage) {
       elements.statusMessage.textContent = msg;
       elements.statusMessage.className = 'status-message' + (type ? ' ' + type : '');
+      if (subtitle) {
+        const sub = document.createElement('span');
+        sub.className = 'status-subtitle';
+        sub.textContent = subtitle;
+        elements.statusMessage.appendChild(sub);
+      }
     }
   }
 
