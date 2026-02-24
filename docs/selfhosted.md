@@ -91,7 +91,45 @@ The admin password only protects bundle deletion. For access control, use an aut
 
 ### Docker
 
-A Docker image is planned for a future release.
+A pre-built image is published to GitHub Container Registry on every release.
+
+```bash
+docker run -d \
+  --name rememory \
+  -p 8080:8080 \
+  -v rememory-data:/data \
+  ghcr.io/eljojo/rememory:latest
+```
+
+This starts the server on port 8080 with persistent data in a Docker volume. Visit `http://localhost:8080` to set up.
+
+To pin a specific version:
+
+```bash
+docker run -d \
+  --name rememory \
+  -p 8080:8080 \
+  -v rememory-data:/data \
+  ghcr.io/eljojo/rememory:v0.0.16
+```
+
+**Docker Compose:**
+
+```yaml
+services:
+  rememory:
+    image: ghcr.io/eljojo/rememory:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - rememory-data:/data
+    restart: unless-stopped
+
+volumes:
+  rememory-data:
+```
+
+The container runs as a single static binary with no dependencies. Data is stored in `/data` inside the container — mount a volume there to persist across restarts.
 
 ## Security considerations
 

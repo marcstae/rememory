@@ -2,10 +2,6 @@
 
 Future ideas for the self-hosted mode. These are possibilities, not commitments.
 
-## Planned
-
-- **Docker image** — Pre-built container for easier deployment
-
 ## Ideas
 
 - **Server-side project.yml** — Store the project configuration (friend names, threshold) on the server so it can be reloaded across sessions

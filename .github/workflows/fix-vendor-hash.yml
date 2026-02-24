@@ -5,6 +5,8 @@ on:
     paths:
       - 'go.mod'
       - 'go.sum'
+      - 'package.json'
+      - 'package-lock.json'
 
 permissions:
   contents: write
@@ -23,27 +25,27 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-25.11
 
-      - name: Update vendorHash
+      - name: Update hashes
         run: |
-          # Try building — it will fail with a hash mismatch
-          BUILD_OUTPUT=$(nix build .#rememory 2>&1 || true)
+          # Up to 3 attempts: npmDeps hash, then vendorHash, then verify
+          for i in 1 2 3; do
+            BUILD_OUTPUT=$(nix build .#rememory 2>&1) && break
 
-          # Extract the "got:" hash from the error output
-          NEW_HASH=$(echo "$BUILD_OUTPUT" | grep -oP 'got:\s+\K\S+' || true)
+            NEW_HASH=$(echo "$BUILD_OUTPUT" | grep -oE 'got:\s+\S+' | sed 's/got:[[:space:]]*//' || true)
+            if [ -z "$NEW_HASH" ]; then
+              echo "Build failed but no hash mismatch found:"
+              echo "$BUILD_OUTPUT"
+              exit 1
+            fi
 
-          if [ -z "$NEW_HASH" ]; then
-            echo "No hash mismatch found — build may have succeeded or failed for another reason."
-            echo "$BUILD_OUTPUT"
-            exit 0
-          fi
-
-          echo "New vendorHash: $NEW_HASH"
-
-          # Replace the vendorHash in flake.nix
-          sed -i "s|vendorHash = \".*\"|vendorHash = \"$NEW_HASH\"|" flake.nix
-
-          # Verify the fix works
-          nix build .#rememory
+            if echo "$BUILD_OUTPUT" | grep -q 'npm-deps'; then
+              echo "Updating npmDeps hash: $NEW_HASH"
+              sed -i "/fetchNpmDeps/,/};/ s|hash = \".*\"|hash = \"$NEW_HASH\"|" flake.nix
+            else
+              echo "Updating vendorHash: $NEW_HASH"
+              sed -i "s|vendorHash = \".*\"|vendorHash = \"$NEW_HASH\"|" flake.nix
+            fi
+          done
 
       - name: Commit updated flake.nix
         run: |
@@ -51,5 +53,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add flake.nix
-          git commit -m "fix: update Nix vendorHash for dependency changes"
+          git commit -m "fix: update Nix hashes for dependency changes"
           git push

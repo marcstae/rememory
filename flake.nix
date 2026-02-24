@@ -26,18 +26,27 @@
           version = "0.1.0";
           src = ./.;
 
-          vendorHash = "sha256-LXUADmBLIQI7tnL3+DxC3COgQHtesf1qhnux07/GBpM=";
+          vendorHash = "sha256-b5LSrwhujjMhsIErDYY22k7ZWiGl2zSMc5HcB1mqu0c=";
           proxyVendor = true; # Download deps during build instead of vendoring
 
-          nativeBuildInputs = [ pkgs.esbuild pkgs.gnumake ];
+          nativeBuildInputs = [ pkgs.esbuild pkgs.gnumake pkgs.nodejs pkgs.cacert ];
+
+          npmDeps = pkgs.fetchNpmDeps {
+            src = ./.;
+            hash = "sha256-LL0tewQfiTu2u+nsHN8JL5vvEKSMwvAq/8pmbhsKffo=";
+          };
 
           # Patch go.mod to match nixpkgs Go version (nixpkgs may lag behind)
           prePatch = ''
             sed -i "s/^go .*/go ${pkgs.go.version}/" go.mod
           '';
 
-          # Build TypeScript and WASM using Makefile
+          # Install npm deps and build TypeScript + WASM
           preBuild = ''
+            export HOME=$TMPDIR
+            npm config set cache "$npmDeps"
+            npm ci --ignore-scripts --prefer-offline
+            export PATH="$PWD/node_modules/.bin:$PATH"
             make wasm
           '';
 
@@ -57,6 +66,20 @@
         packages = {
           rememory = rememory;
           default = rememory;
+
+          docker = pkgs.dockerTools.buildImage {
+            name = "rememory";
+            tag = "latest";
+            copyToRoot = pkgs.buildEnv {
+              name = "rememory-root";
+              paths = [ rememory ];
+            };
+            config = {
+              Cmd = [ "${rememory}/bin/rememory" "serve" "--host" "0.0.0.0" "--port" "8080" "--data" "/data" ];
+              ExposedPorts = { "8080/tcp" = { }; };
+              Volumes = { "/data" = { }; };
+            };
+          };
 
           e2e-tests = pkgs.buildNpmPackage {
             pname = "rememory-e2e";
