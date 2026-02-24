@@ -51,7 +51,8 @@ jobs:
         run: ./rememory html site -o _site
 
       - name: Add Google site verification file
-        run: echo 'google-site-verification: google1b0743ea2e7f5c7c.html' > _site/google1b0743ea2e7f5c7c.html
+        run: |
+          echo 'google-site-verification: google1b0743ea2e7f5c7c.html' > _site/google1b0743ea2e7f5c7c.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
