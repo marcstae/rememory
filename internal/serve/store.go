@@ -107,8 +107,8 @@ func (s *Store) Delete(id string) error {
 	return nil
 }
 
-// Latest returns the metadata for the most recently created bundle, or nil if none exist.
-func (s *Store) Latest() (*BundleMeta, error) {
+// List returns metadata for all bundles, sorted by creation time (newest first).
+func (s *Store) List() ([]BundleMeta, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -138,15 +138,23 @@ func (s *Store) Latest() (*BundleMeta, error) {
 		metas = append(metas, meta)
 	}
 
-	if len(metas) == 0 {
-		return nil, nil
-	}
-
 	// Sort by creation time, newest first
 	sort.Slice(metas, func(i, j int) bool {
 		return metas[i].Created > metas[j].Created
 	})
 
+	return metas, nil
+}
+
+// Latest returns the metadata for the most recently created bundle, or nil if none exist.
+func (s *Store) Latest() (*BundleMeta, error) {
+	metas, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	if len(metas) == 0 {
+		return nil, nil
+	}
 	return &metas[0], nil
 }
 

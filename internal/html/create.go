@@ -124,10 +124,12 @@ func GenerateMakerHTML(createWASMBytes []byte, version, githubURL string, opts M
 
 	// Selfhosted mode: rewrite nav links to server routes
 	if opts.Selfhosted {
-		html = strings.Replace(html, `href="index.html"`, `href="/about"`, -1)
+		html = strings.Replace(html, `href="index.html" class="logo"`, `href="/" class="logo"`, -1)
+		html = strings.Replace(html, `href="index.html" data-i18n="nav_about"`, `href="/about" data-i18n="nav_about"`, -1)
 		html = strings.Replace(html, `href="maker.html"`, `href="/create"`, -1)
 		html = strings.Replace(html, `href="recover.html"`, `href="/recover"`, -1)
 		html = strings.Replace(html, `href="docs.html"`, `href="/docs"`, -1)
+		html = strings.Replace(html, `<a href="`+core.GitHubRepo+`" target="_blank">GitHub</a>`, "", -1)
 	}
 
 	// Apply CSP nonce to all script tags

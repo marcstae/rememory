@@ -75,7 +75,7 @@ test.describe('Selfhosted Server', () => {
     }
   });
 
-  test('happy path: setup, create, recover, delete', async ({ page }, testInfo) => {
+  test('happy path: setup, create, home, recover, delete', async ({ page }, testInfo) => {
     testInfo.setTimeout(180000);
 
     // -----------------------------------------------------------
@@ -89,12 +89,18 @@ test.describe('Selfhosted Server', () => {
     await page.locator('#confirm').fill(adminPassword);
     await page.locator('button[type="submit"]').click();
 
-    // Should redirect to /create (no manifest yet)
-    await page.waitForURL(`${baseURL}/create`);
+    // Should land on home page after setup (root /)
+    await page.waitForURL(baseURL + '/');
+
+    // Home page should show empty state
+    await expect(page.locator('.empty-state')).toBeVisible();
+    await expect(page.locator('.empty-state')).toContainText('No recovery bundles here yet');
 
     // -----------------------------------------------------------
-    // Step 2: Create bundles on /create page
+    // Step 2: Navigate to /create and create bundles
     // -----------------------------------------------------------
+    await page.goto(`${baseURL}/create`);
+
     // Wait for WASM to load
     await page.waitForFunction(
       () => (window as any).rememoryReady === true,
@@ -127,10 +133,10 @@ test.describe('Selfhosted Server', () => {
     // Also check for the "Saved to server" toast
     await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5000 });
 
-    // Verify "Go to recovery page" link is present and points to /recover
-    const recoveryLink = page.locator('.next-steps-hint a[href="/recover"]');
-    await expect(recoveryLink).toBeVisible();
-    expect(await recoveryLink.getAttribute('href')).toBe('/recover');
+    // Verify "Go to home page" link is present and points to /
+    const homeLink = page.locator('.next-steps-hint a[href="/"]');
+    await expect(homeLink).toBeVisible();
+    expect(await homeLink.textContent()).toBe('Go to home page');
 
     // Verify meta.json does NOT contain friend names
     const bundleDirs = fs.readdirSync(path.join(dataDir, 'bundles'));
@@ -168,9 +174,26 @@ test.describe('Selfhosted Server', () => {
     }
 
     // -----------------------------------------------------------
-    // Step 3: Navigate to /recover and complete recovery
+    // Step 3: Navigate to home — single bundle card visible
     // -----------------------------------------------------------
-    await page.goto(`${baseURL}/recover`);
+    await page.goto(baseURL);
+    await expect(page.locator('.bundle-card')).toHaveCount(1);
+
+    // Bundle card should show date and threshold info
+    const card = page.locator('.bundle-card').first();
+    await expect(card.locator('.bundle-date')).toBeVisible();
+    await expect(card.locator('.bundle-meta')).toContainText('2 of 2 pieces');
+
+    // -----------------------------------------------------------
+    // Step 4: Click Recover on bundle card — goes to /recover?id=
+    // -----------------------------------------------------------
+    const recoverLink = card.locator('.bundle-actions a');
+    const recoverHref = await recoverLink.getAttribute('href');
+    expect(recoverHref).toContain('/recover?id=');
+
+    await recoverLink.click();
+    await page.waitForURL(/\/recover\?id=/);
+
     await page.waitForFunction(
       () => (window as any).rememoryAppReady === true,
       { timeout: 30000 }
@@ -191,26 +214,22 @@ test.describe('Selfhosted Server', () => {
     await expect(page.locator('#download-all-btn')).toBeVisible();
 
     // -----------------------------------------------------------
-    // Step 4: Delete the bundle using admin UI on /recover page
+    // Step 5: Navigate home, delete via the delete button
     // -----------------------------------------------------------
-    // Re-navigate to /recover to get a fresh page with the admin section
-    await page.goto(`${baseURL}/recover`);
-    await page.waitForFunction(
-      () => (window as any).rememoryAppReady === true,
-      { timeout: 30000 }
-    );
+    await page.goto(baseURL);
+    await expect(page.locator('.bundle-card')).toHaveCount(1);
 
-    // Open the admin details section
-    const adminSection = page.locator('.admin-section');
-    await expect(adminSection).toBeVisible();
-    await adminSection.locator('summary').click();
+    // Click Delete toggle on the bundle card
+    await page.locator('.delete-toggle').click();
+    await expect(page.locator('.delete-form.visible')).toBeVisible();
 
-    // Enter password and delete
-    await adminSection.locator('.admin-password').fill(adminPassword);
-    await adminSection.locator('.admin-delete-btn').click();
+    // Enter password and confirm deletion
+    await page.locator('.delete-password').fill(adminPassword);
+    await page.locator('.delete-btn').click();
 
-    // Should redirect to /create after successful deletion
-    await page.waitForURL(`${baseURL}/create`, { timeout: 10000 });
+    // Home should show empty state again
+    await expect(page.locator('.empty-state')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.empty-state')).toContainText('No recovery bundles here yet');
 
     // Verify manifest is gone via API
     const statusAfter = await fetch(`${baseURL}/api/status`);

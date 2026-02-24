@@ -1461,7 +1461,14 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       const selfhostedConfig = window.SELFHOSTED_CONFIG;
       if (selfhostedConfig?.hasManifest) {
         try {
-          const resp = await fetch('/api/bundle/manifest');
+          // Use ?id= from URL if present, otherwise fetch latest
+          const urlParams = new URLSearchParams(window.location.search);
+          const bundleId = urlParams.get('id');
+          const manifestURL = bundleId
+            ? `/api/bundle/manifest?id=${encodeURIComponent(bundleId)}`
+            : '/api/bundle/manifest';
+
+          const resp = await fetch(manifestURL);
           if (resp.ok) {
             const data = new Uint8Array(await resp.arrayBuffer());
             if (data.length > 0 && !state.manifest) {
@@ -1470,72 +1477,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
           }
         } catch {
           // Server not reachable — user can still load manifest manually
-        }
-
-        // Admin section: delete bundle from server
-        const footer = document.querySelector('footer');
-        if (footer) {
-          const admin = document.createElement('details');
-          admin.className = 'admin-section';
-          admin.style.cssText = 'max-width: 720px; margin: 2rem auto; padding: 0 1rem;';
-
-          const summary = document.createElement('summary');
-          summary.textContent = 'Admin';
-          summary.style.cssText = 'cursor: pointer; color: var(--text-secondary, #6B6560); font-size: 0.875rem;';
-          admin.appendChild(summary);
-
-          const inner = document.createElement('div');
-          inner.style.cssText = 'margin-top: 0.75rem;';
-          inner.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-              <input type="password" class="admin-password" placeholder="Admin password"
-                style="padding: 0.375rem 0.75rem; border: 1px solid var(--border, #ddd); border-radius: 4px; font-size: 0.875rem; width: 14rem;">
-              <button type="button" class="admin-delete-btn"
-                style="padding: 0.375rem 0.75rem; background: none; border: 1px solid var(--border, #ddd); border-radius: 4px; color: var(--text-secondary, #6B6560); font-size: 0.875rem; cursor: pointer;">
-                Delete bundle
-              </button>
-            </div>
-            <div class="admin-error" style="color: #c44; font-size: 0.8125rem; margin-top: 0.5rem;"></div>
-          `;
-          admin.appendChild(inner);
-
-          footer.parentNode!.insertBefore(admin, footer);
-
-          const deleteBtn = inner.querySelector('.admin-delete-btn') as HTMLButtonElement;
-          const passwordInput = inner.querySelector('.admin-password') as HTMLInputElement;
-          const errorDiv = inner.querySelector('.admin-error') as HTMLElement;
-
-          deleteBtn.addEventListener('click', async () => {
-            const password = passwordInput.value;
-            if (!password) {
-              errorDiv.textContent = 'Enter the admin password.';
-              return;
-            }
-
-            deleteBtn.disabled = true;
-            deleteBtn.textContent = 'Deleting...';
-            errorDiv.textContent = '';
-
-            try {
-              const resp = await fetch('/api/bundle', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
-              });
-
-              if (!resp.ok) {
-                const text = await resp.text();
-                throw new Error(text || `Server returned ${resp.status}`);
-              }
-
-              window.location.href = '/create';
-            } catch (err) {
-              const msg = (err instanceof Error) ? err.message : String(err);
-              errorDiv.textContent = msg;
-              deleteBtn.disabled = false;
-              deleteBtn.textContent = 'Delete bundle';
-            }
-          });
         }
       }
     }

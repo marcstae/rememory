@@ -930,7 +930,7 @@ declare const __SELFHOSTED__: boolean;
         }
 
         // Hide "Save project.yml" (not useful in selfhosted mode yet)
-        // and add a link to the recovery page instead.
+        // and add a link to the home page instead.
         const nextStepsHint = document.querySelector('.next-steps-hint');
         if (nextStepsHint) {
           const yamlLink = nextStepsHint.querySelector('#download-yaml-btn');
@@ -943,8 +943,8 @@ declare const __SELFHOSTED__: boolean;
 
           const sep = document.createTextNode(' \u00b7 ');
           const link = document.createElement('a');
-          link.href = '/recover';
-          link.textContent = 'Go to recovery page';
+          link.href = '/';
+          link.textContent = 'Go to home page';
           nextStepsHint.appendChild(sep);
           nextStepsHint.appendChild(link);
         }

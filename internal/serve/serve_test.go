@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func newTestServer(t *testing.T) *Server {
@@ -144,8 +145,20 @@ func TestBundleLifecycle(t *testing.T) {
 		t.Error("downloaded manifest doesn't match uploaded")
 	}
 
+	bundleID := result["id"].(string)
+
+	// Delete without ID should fail
+	body := `{"password":"adminpass"}`
+	req = httptest.NewRequest("DELETE", "/api/bundle", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing ID, got %d", w.Code)
+	}
+
 	// Delete with wrong password
-	body := `{"password":"wrong"}`
+	body = `{"id":"` + bundleID + `","password":"wrong"}`
 	req = httptest.NewRequest("DELETE", "/api/bundle", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -154,8 +167,8 @@ func TestBundleLifecycle(t *testing.T) {
 		t.Errorf("expected 401 for wrong password, got %d", w.Code)
 	}
 
-	// Delete with correct password
-	body = `{"password":"adminpass"}`
+	// Delete with correct password and ID
+	body = `{"id":"` + bundleID + `","password":"adminpass"}`
 	req = httptest.NewRequest("DELETE", "/api/bundle", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -257,7 +270,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 }
 
-func TestRootRedirects(t *testing.T) {
+func TestRootPage(t *testing.T) {
 	srv := newTestServer(t)
 
 	// Before setup: should show setup page (200, not redirect)
@@ -271,29 +284,143 @@ func TestRootRedirects(t *testing.T) {
 		t.Error("expected setup page content")
 	}
 
-	// After setup, no manifest: redirect to /create
+	// After setup, no manifest: should show home page with empty state
 	setupPassword(t, srv, "redirectpass1")
 	req = httptest.NewRequest("GET", "/", nil)
 	w = httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusFound {
-		t.Errorf("expected 302 redirect, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for home page, got %d", w.Code)
 	}
-	if w.Header().Get("Location") != "/create" {
-		t.Errorf("expected redirect to /create, got %s", w.Header().Get("Location"))
+	body := w.Body.String()
+	if !strings.Contains(body, "About ReMemory") {
+		t.Error("expected home page intro")
+	}
+	if !strings.Contains(body, "var BUNDLES = []") {
+		t.Error("expected empty bundles array in home page")
 	}
 
-	// After upload: redirect to /recover
+	// After upload: should show home page with bundle data
 	manifest := []byte("test-manifest")
-	uploadManifest(t, srv, manifest, nil)
+	uploadManifest(t, srv, manifest, map[string]any{"name": "my-bundle", "threshold": 2, "total": 3})
 	req = httptest.NewRequest("GET", "/", nil)
 	w = httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusFound {
-		t.Errorf("expected 302 redirect, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for home page with bundle, got %d", w.Code)
 	}
-	if w.Header().Get("Location") != "/recover" {
-		t.Errorf("expected redirect to /recover, got %s", w.Header().Get("Location"))
+	body = w.Body.String()
+	if !strings.Contains(body, "my-bundle") {
+		t.Error("expected bundle name in home page")
+	}
+}
+
+func TestStoreList(t *testing.T) {
+	srv := newTestServer(t)
+	setupPassword(t, srv, "listpass12345")
+
+	// List should return empty initially
+	metas, err := srv.store.List()
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(metas) != 0 {
+		t.Errorf("expected 0 bundles, got %d", len(metas))
+	}
+
+	// Upload two bundles with a pause so timestamps differ
+	uploadManifest(t, srv, []byte("manifest-1"), map[string]any{"name": "first"})
+	time.Sleep(1100 * time.Millisecond)
+	uploadManifest(t, srv, []byte("manifest-2"), map[string]any{"name": "second"})
+
+	metas, err = srv.store.List()
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(metas) != 2 {
+		t.Errorf("expected 2 bundles, got %d", len(metas))
+	}
+	// Newest first
+	if metas[0].Name != "second" {
+		t.Errorf("expected newest bundle first, got %q", metas[0].Name)
+	}
+}
+
+func TestAPIListBundles(t *testing.T) {
+	srv := newTestServer(t)
+	setupPassword(t, srv, "listpass12345")
+
+	// Empty list
+	req := httptest.NewRequest("GET", "/api/bundles", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var bundles []BundleMeta
+	json.NewDecoder(w.Body).Decode(&bundles)
+	if len(bundles) != 0 {
+		t.Errorf("expected 0 bundles, got %d", len(bundles))
+	}
+
+	// Upload and list again
+	uploadManifest(t, srv, []byte("manifest-data"), map[string]any{"name": "test-bundle", "threshold": 2, "total": 3})
+
+	req = httptest.NewRequest("GET", "/api/bundles", nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	json.NewDecoder(w.Body).Decode(&bundles)
+	if len(bundles) != 1 {
+		t.Errorf("expected 1 bundle, got %d", len(bundles))
+	}
+	if bundles[0].Name != "test-bundle" {
+		t.Errorf("expected name 'test-bundle', got %q", bundles[0].Name)
+	}
+}
+
+func TestManifestByID(t *testing.T) {
+	srv := newTestServer(t)
+	setupPassword(t, srv, "manifestpass1")
+
+	// Upload two bundles with a pause so timestamps differ
+	w1 := uploadManifest(t, srv, []byte("manifest-A"), map[string]any{"name": "first"})
+	var r1 map[string]any
+	json.NewDecoder(w1.Body).Decode(&r1)
+	id1 := r1["id"].(string)
+
+	time.Sleep(1100 * time.Millisecond)
+
+	w2 := uploadManifest(t, srv, []byte("manifest-B"), map[string]any{"name": "second"})
+	var r2 map[string]any
+	json.NewDecoder(w2.Body).Decode(&r2)
+	id2 := r2["id"].(string)
+
+	// Fetch by specific ID
+	req := httptest.NewRequest("GET", "/api/bundle/manifest?id="+id1, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !bytes.Equal(w.Body.Bytes(), []byte("manifest-A")) {
+		t.Error("expected manifest-A for first ID")
+	}
+
+	// Fetch second by ID
+	req = httptest.NewRequest("GET", "/api/bundle/manifest?id="+id2, nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if !bytes.Equal(w.Body.Bytes(), []byte("manifest-B")) {
+		t.Error("expected manifest-B for second ID")
+	}
+
+	// Fetch without ID returns latest (second)
+	req = httptest.NewRequest("GET", "/api/bundle/manifest", nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if !bytes.Equal(w.Body.Bytes(), []byte("manifest-B")) {
+		t.Error("expected manifest-B for latest")
 	}
 }
 

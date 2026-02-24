@@ -15,11 +15,8 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 		s.handleSetupPage(w, r)
 		return
 	}
-	if s.store.HasManifest() {
-		http.Redirect(w, r, "/recover", http.StatusFound)
-	} else {
-		http.Redirect(w, r, "/create", http.StatusFound)
-	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, s.generateHomeHTML())
 }
 
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +117,19 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
 
+func (s *Server) handleAPIListBundles(w http.ResponseWriter, r *http.Request) {
+	bundles, err := s.store.List()
+	if err != nil {
+		http.Error(w, "Could not list bundles.", http.StatusInternalServerError)
+		return
+	}
+	if bundles == nil {
+		bundles = []BundleMeta{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(bundles)
+}
+
 func (s *Server) handleAPISaveBundle(w http.ResponseWriter, r *http.Request) {
 	if !IsSetup(s.store) {
 		http.Error(w, "Set up an admin password first.", http.StatusForbidden)
@@ -171,10 +181,16 @@ func (s *Server) handleAPISaveBundle(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAPIDeleteBundle(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		ID       string `json:"id"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "Invalid request body.", http.StatusBadRequest)
+		return
+	}
+
+	if body.ID == "" {
+		http.Error(w, "Missing bundle ID.", http.StatusBadRequest)
 		return
 	}
 
@@ -183,14 +199,8 @@ func (s *Server) handleAPIDeleteBundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	latest, err := s.store.Latest()
-	if err != nil || latest == nil {
-		http.Error(w, "No bundle to delete.", http.StatusNotFound)
-		return
-	}
-
-	if err := s.store.Delete(latest.ID); err != nil {
-		http.Error(w, "Could not delete bundle.", http.StatusInternalServerError)
+	if err := s.store.Delete(body.ID); err != nil {
+		http.Error(w, "Bundle not found.", http.StatusNotFound)
 		return
 	}
 
@@ -199,13 +209,21 @@ func (s *Server) handleAPIDeleteBundle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAPIManifest(w http.ResponseWriter, r *http.Request) {
-	latest, err := s.store.Latest()
-	if err != nil || latest == nil {
-		http.Error(w, "No manifest available.", http.StatusNotFound)
-		return
+	var bundleID string
+
+	if id := r.URL.Query().Get("id"); id != "" {
+		bundleID = id
+	} else {
+		// Fall back to latest bundle
+		latest, err := s.store.Latest()
+		if err != nil || latest == nil {
+			http.Error(w, "No manifest available.", http.StatusNotFound)
+			return
+		}
+		bundleID = latest.ID
 	}
 
-	manifestPath := s.store.ManifestPath(latest.ID)
+	manifestPath := s.store.ManifestPath(bundleID)
 	f, err := os.Open(manifestPath)
 	if err != nil {
 		http.Error(w, "Manifest not found.", http.StatusNotFound)
