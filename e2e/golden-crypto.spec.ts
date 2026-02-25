@@ -1,8 +1,7 @@
 import { test, expect } from './fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { getRememoryBin, createTestProject, cleanupProject, extractBundle } from './helpers';
+import { getRememoryBin, createTestProject, cleanupProject, extractBundle, getCryptoTestHtml } from './helpers';
 
 // Load golden fixtures
 const v1Golden = JSON.parse(
@@ -17,45 +16,11 @@ const goldenFixtures = [
   { name: 'v2', data: v2Golden, manifestPath: 'internal/core/testdata/v2-bundle/MANIFEST.age' },
 ];
 
-// Create a test HTML that loads the crypto module
-function createTestHtml(tmpDir: string): string {
-  const htmlPath = path.join(tmpDir, 'crypto-test.html');
-  const { execSync } = require('child_process');
-  const cryptoJsPath = path.join(tmpDir, 'crypto.js');
-
-  execSync(
-    `npx esbuild internal/html/assets/src/crypto/index.ts --bundle --format=iife --global-name=RememoryCrypto --outfile=${cryptoJsPath} --loader:.txt=text`,
-    { cwd: process.cwd() }
-  );
-
-  const cryptoJs = fs.readFileSync(cryptoJsPath, 'utf8');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Crypto Test</title></head>
-<body>
-  <script>${cryptoJs}</script>
-  <script>window.rememoryCrypto = RememoryCrypto; window.testReady = true;</script>
-</body>
-</html>`;
-
-  fs.writeFileSync(htmlPath, html);
-  return htmlPath;
-}
-
-test.describe('Golden Crypto Compatibility', () => {
-  let tmpDir: string;
+test.describe('Golden Crypto Compatibility @cross-browser', () => {
   let testHtmlPath: string;
 
   test.beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-golden-crypto-'));
-    testHtmlPath = createTestHtml(tmpDir);
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    testHtmlPath = getCryptoTestHtml();
   });
 
   // Full decrypt flow for both versions
@@ -236,7 +201,6 @@ test.describe('Golden Crypto Compatibility', () => {
 });
 
 test.describe('extractBundle from recover.html', () => {
-  let tmpDir: string;
   let testHtmlPath: string;
   let projectDir: string;
   let bundlesDir: string;
@@ -248,17 +212,13 @@ test.describe('extractBundle from recover.html', () => {
       return;
     }
 
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-extract-bundle-'));
-    testHtmlPath = createTestHtml(tmpDir);
+    testHtmlPath = getCryptoTestHtml();
     projectDir = createTestProject();
     bundlesDir = path.join(projectDir, 'output', 'bundles');
   });
 
   test.afterAll(async () => {
     cleanupProject(projectDir);
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
   });
 
   test('extractBundle extracts holderShare from personalized recover.html', async ({ page }) => {

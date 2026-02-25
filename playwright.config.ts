@@ -21,14 +21,17 @@ export default defineConfig({
   use: {
     trace: 'on-first-retry',
   },
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'firefox',
+      name: 'firefox-crypto',
       use: { ...devices['Desktop Firefox'] },
+      grep: /@cross-browser/,
     },
   ],
 });

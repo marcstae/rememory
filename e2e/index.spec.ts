@@ -1,31 +1,16 @@
 import { test, expect } from './fixtures';
-import { execFileSync } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { getRememoryBin } from './helpers';
+import { getRememoryBin, getIndexHtml } from './helpers';
 
 test.describe('Landing Page', () => {
-  let tmpDir: string;
   let indexPath: string;
 
   test.beforeAll(async () => {
-    const bin = getRememoryBin();
-    if (!fs.existsSync(bin)) {
+    if (!fs.existsSync(getRememoryBin())) {
       test.skip();
       return;
     }
-
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-index-'));
-    indexPath = path.join(tmpDir, 'index.html');
-
-    execFileSync(bin, ['html', 'index', '-o', indexPath], { stdio: 'inherit' });
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    indexPath = getIndexHtml();
   });
 
   test('index.html loads with key sections', async ({ page }) => {

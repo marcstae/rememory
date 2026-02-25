@@ -8,33 +8,7 @@
 import { test, expect } from './fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-
-// Helper to create test HTML that loads the crypto module
-function createCryptoTestHtml(tmpDir: string): string {
-  const htmlPath = path.join(tmpDir, 'crypto-test.html');
-  const { execSync } = require('child_process');
-  const cryptoJsPath = path.join(tmpDir, 'crypto.js');
-
-  execSync(
-    `npx esbuild internal/html/assets/src/crypto/index.ts --bundle --format=iife --global-name=RememoryCrypto --outfile=${cryptoJsPath} --loader:.txt=text`,
-    { cwd: process.cwd() }
-  );
-
-  const cryptoJs = fs.readFileSync(cryptoJsPath, 'utf8');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Crypto Test</title></head>
-<body>
-  <script>${cryptoJs}</script>
-  <script>window.rememoryCrypto = RememoryCrypto; window.testReady = true;</script>
-</body>
-</html>`;
-
-  fs.writeFileSync(htmlPath, html);
-  return htmlPath;
-}
+import { getCryptoTestHtml } from './helpers';
 
 // Load wordlists from Go source for test data
 function loadWordlist(lang: string): string[] {
@@ -69,20 +43,10 @@ function generateTestWords(lang: string): string[] {
 }
 
 test.describe('Multi-language BIP39 Support', () => {
-  let tmpDir: string;
   let testHtmlPath: string;
 
   test.beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rememory-multilang-crypto-')
-    );
-    testHtmlPath = createCryptoTestHtml(tmpDir);
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    testHtmlPath = getCryptoTestHtml();
   });
 
   const nonEnglishLangs = [
@@ -174,18 +138,10 @@ test.describe('Multi-language BIP39 Support', () => {
 });
 
 test.describe('Language Auto-detection', () => {
-  let tmpDir: string;
   let testHtmlPath: string;
 
   test.beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-detect-lang-'));
-    testHtmlPath = createCryptoTestHtml(tmpDir);
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    testHtmlPath = getCryptoTestHtml();
   });
 
   test('detect Spanish words', async ({ page }) => {
@@ -279,18 +235,10 @@ test.describe('Language Auto-detection', () => {
 });
 
 test.describe('Word Normalization', () => {
-  let tmpDir: string;
   let testHtmlPath: string;
 
   test.beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-normalize-'));
-    testHtmlPath = createCryptoTestHtml(tmpDir);
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir && fs.existsSync(tmpDir)) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    testHtmlPath = getCryptoTestHtml();
   });
 
   test('NFD normalization: "ábaco" without accent finds "ábaco"', async ({

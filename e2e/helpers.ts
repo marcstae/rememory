@@ -5,6 +5,110 @@ import * as path from 'path';
 import * as os from 'os';
 import AdmZip from 'adm-zip';
 
+// Shared setup from global-setup.ts (pre-created resources)
+interface SharedSetup {
+  tmpDir: string;
+  standardProject: string;
+  noEmbedProject: string;
+  anonymousProject: string;
+  makerHtml: string;
+  recoverHtml: string;
+  docsHtml: string;
+  docsEsHtml: string;
+  indexHtml: string;
+  cryptoTestHtml: string;
+}
+
+let _sharedSetup: SharedSetup | null | undefined;
+
+function getSharedSetup(): SharedSetup | null {
+  if (_sharedSetup === undefined) {
+    const setupPath = process.env.REMEMORY_E2E_SETUP;
+    if (setupPath && fs.existsSync(setupPath)) {
+      _sharedSetup = JSON.parse(fs.readFileSync(setupPath, 'utf8'));
+    } else {
+      _sharedSetup = null;
+    }
+  }
+  return _sharedSetup;
+}
+
+// --- Fallback temp directory (lazily created, cleaned on process exit) ---
+let _fallbackTmpDir: string | null = null;
+
+function getFallbackTmpDir(): string {
+  if (!_fallbackTmpDir) {
+    _fallbackTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-e2e-fallback-'));
+  }
+  return _fallbackTmpDir;
+}
+
+// Build crypto test HTML (internal helper)
+function buildCryptoTestHtml(tmpDir: string): string {
+  const { execSync } = require('child_process');
+  const cryptoJsPath = path.join(tmpDir, 'crypto.js');
+
+  execSync(
+    `npx esbuild internal/html/assets/src/crypto/index.ts --bundle --format=iife --global-name=RememoryCrypto --outfile=${cryptoJsPath} --loader:.txt=text`,
+    { cwd: process.cwd() }
+  );
+
+  const cryptoJs = fs.readFileSync(cryptoJsPath, 'utf8');
+  const htmlPath = path.join(tmpDir, 'crypto-test.html');
+  fs.writeFileSync(htmlPath, `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Crypto Test</title></head>
+<body>
+  <script>${cryptoJs}</script>
+  <script>window.rememoryCrypto = RememoryCrypto; window.testReady = true;</script>
+</body>
+</html>`);
+
+  return htmlPath;
+}
+
+// --- Self-contained resource getters (shared or fallback, cached) ---
+
+const _resourceCache = new Map<string, string>();
+
+/** Returns a cached resource path, trying the shared setup first, then building on demand. */
+function getOrBuild(field: keyof SharedSetup, build: (tmpDir: string) => string): string {
+  const cached = _resourceCache.get(field);
+  if (cached) return cached;
+  const shared = getSharedSetup();
+  const sharedPath = shared?.[field];
+  if (typeof sharedPath === 'string' && fs.existsSync(sharedPath)) {
+    _resourceCache.set(field, sharedPath);
+    return sharedPath;
+  }
+  const built = build(getFallbackTmpDir());
+  _resourceCache.set(field, built);
+  return built;
+}
+
+/** Helper to build an HTML resource via the rememory CLI. */
+function buildHtmlResource(tmpDir: string, filename: string, args: string[]): string {
+  const htmlPath = path.join(tmpDir, filename);
+  execFileSync(getRememoryBin(), ['html', ...args, '-o', htmlPath], { stdio: 'inherit' });
+  return htmlPath;
+}
+
+export function getCryptoTestHtml(): string {
+  return getOrBuild('cryptoTestHtml', buildCryptoTestHtml);
+}
+
+export function getDocsHtml(): string {
+  return getOrBuild('docsHtml', (dir) => buildHtmlResource(dir, 'docs.html', ['docs']));
+}
+
+export function getDocsEsHtml(): string {
+  return getOrBuild('docsEsHtml', (dir) => buildHtmlResource(dir, 'docs.es.html', ['docs', '--lang', 'es']));
+}
+
+export function getIndexHtml(): string {
+  return getOrBuild('indexHtml', (dir) => buildHtmlResource(dir, 'index.html', ['index']));
+}
+
 // Get absolute path to rememory binary
 export function getRememoryBin(): string {
   const binEnv = process.env.REMEMORY_BIN || './rememory';
@@ -13,6 +117,17 @@ export function getRememoryBin(): string {
 
 // Generate standalone HTML file for testing
 export function generateStandaloneHTML(tmpDir: string, type: 'recover' | 'create', extraFlags: string[] = []): string {
+  // Use pre-built HTML from global setup when available (standard flags only)
+  if (extraFlags.length === 0) {
+    const shared = getSharedSetup();
+    if (shared) {
+      const sharedPath = type === 'create' ? shared.makerHtml : shared.recoverHtml;
+      if (sharedPath && fs.existsSync(sharedPath)) {
+        return sharedPath;
+      }
+    }
+  }
+
   const bin = getRememoryBin();
   const htmlPath = path.join(tmpDir, type === 'create' ? 'maker.html' : 'recover.html');
 
@@ -31,6 +146,7 @@ interface TestProjectOptions {
 // instead of running init+seal+bundle repeatedly for identical configs.
 const projectCache = new Map<string, string>();
 const cachedPaths = new Set<string>();
+const globalSetupPaths = new Set<string>();
 
 function cacheKey(options: TestProjectOptions): string {
   return options.noEmbedManifest ? 'standard-no-embed' : 'standard';
@@ -42,6 +158,17 @@ export function createTestProject(options: TestProjectOptions = {}): string {
   const cached = projectCache.get(key);
   if (cached && fs.existsSync(cached)) {
     return cached;
+  }
+
+  // Use pre-created project from global setup when available
+  const shared = getSharedSetup();
+  if (shared) {
+    const sharedPath = options.noEmbedManifest ? shared.noEmbedProject : shared.standardProject;
+    if (sharedPath && fs.existsSync(sharedPath)) {
+      projectCache.set(key, sharedPath);
+      globalSetupPaths.add(sharedPath);
+      return sharedPath;
+    }
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-e2e-'));
@@ -77,6 +204,14 @@ export function createAnonymousTestProject(): string {
     return cached;
   }
 
+  // Use pre-created project from global setup when available
+  const shared = getSharedSetup();
+  if (shared?.anonymousProject && fs.existsSync(shared.anonymousProject)) {
+    projectCache.set(key, shared.anonymousProject);
+    globalSetupPaths.add(shared.anonymousProject);
+    return shared.anonymousProject;
+  }
+
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-e2e-anon-'));
   const projectDir = path.join(tmpDir, 'test-anon-project');
   const bin = getRememoryBin();
@@ -105,12 +240,14 @@ export function createAnonymousTestProject(): string {
 export function cleanupProject(projectDir: string): void {
   if (!projectDir || !fs.existsSync(projectDir)) return;
   if (cachedPaths.has(projectDir)) return; // shared project, leave it for process exit cleanup
+  if (globalSetupPaths.has(projectDir)) return; // shared by global setup, cleaned by global teardown
   fs.rmSync(projectDir, { recursive: true, force: true });
 }
 
-// Clean up all cached projects when the worker process exits
+// Clean up all cached projects and fallback resources when the worker process exits
 process.on('exit', () => {
   for (const dir of cachedPaths) {
+    if (globalSetupPaths.has(dir)) continue; // cleaned by global teardown
     try {
       // Walk up to the tmpDir parent (projectDir is tmpDir/test-project)
       const tmpDir = path.dirname(dir);
@@ -118,6 +255,9 @@ process.on('exit', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
     } catch { /* best effort */ }
+  }
+  if (_fallbackTmpDir && fs.existsSync(_fallbackTmpDir)) {
+    try { fs.rmSync(_fallbackTmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 });
 

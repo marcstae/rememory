@@ -2,9 +2,11 @@ import { test, expect } from './fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import AdmZip from 'adm-zip';
 import {
   getRememoryBin,
   CreationPage,
+  RecoveryPage,
   generateStandaloneHTML
 } from './helpers';
 
@@ -162,68 +164,6 @@ friends:
 
     // Should now have all 4 files
     await creation.expectFileCount(4);
-  });
-
-  test('full bundle creation workflow', async ({ page }, testInfo) => {
-    // Increase timeout for WASM-heavy operations (especially Firefox)
-    testInfo.setTimeout(120000);
-    const creation = new CreationPage(page, htmlPath);
-
-    await creation.open();
-
-    // Fill in friends
-    await creation.setFriend(0, 'Alice', 'alice@test.com');
-    await creation.setFriend(1, 'Bob', 'bob@test.com');
-
-    // Add a third friend
-    await creation.addFriend();
-    await creation.setFriend(2, 'Carol', 'carol@test.com');
-
-    // Set threshold to 2
-    await creation.setThreshold(2);
-
-    // Add test files
-    const testFiles = creation.createTestFiles(tmpDir);
-    await creation.addFiles(testFiles);
-
-    // Generate button should now be enabled
-    await creation.expectGenerateEnabled();
-
-    // Generate bundles
-    await creation.generate();
-
-    // Should show completion
-    await creation.expectGenerationComplete();
-
-    // Should show bundles for each friend
-    await creation.expectBundleCount(3);
-    await creation.expectBundleFor('Alice');
-    await creation.expectBundleFor('Bob');
-    await creation.expectBundleFor('Carol');
-  });
-
-  test('generated bundles are valid', async ({ page }, testInfo) => {
-    // Increase timeout for WASM-heavy operations (especially Firefox)
-    testInfo.setTimeout(120000);
-    const creation = new CreationPage(page, htmlPath);
-
-    await creation.open();
-
-    // Quick setup - name is the only required field, contact is optional
-    await creation.setFriend(0, 'Alice', 'alice@test.com');
-    await creation.setFriend(1, 'Bob', 'bob@test.com');
-
-    const testFiles = creation.createTestFiles(tmpDir);
-    await creation.addFiles(testFiles);
-
-    // Generate bundles
-    await creation.generate();
-    await creation.expectGenerationComplete();
-
-    // Download a bundle and verify it can be opened
-    const bundleData = await creation.downloadBundle(0);
-    expect(bundleData).toBeTruthy();
-    expect(bundleData.length).toBeGreaterThan(1000); // Should be substantial
   });
 
   test('language switching works', async ({ page }) => {
@@ -403,5 +343,60 @@ friends:
 
     // Should have successfully imported 2 friends
     await creation.expectFriendCount(2);
+  });
+
+  test('browser-created bundles can be recovered @cross-browser', async ({ page }, testInfo) => {
+    testInfo.setTimeout(120000);
+    const creation = new CreationPage(page, htmlPath);
+
+    await creation.open();
+
+    // Set up friends
+    await creation.setFriend(0, 'Alice', 'alice@test.com');
+    await creation.setFriend(1, 'Bob', 'bob@test.com');
+
+    // Add test files
+    const testFiles = creation.createTestFiles(tmpDir, 'roundtrip');
+    await creation.addFiles(testFiles);
+
+    // Generate bundles via WASM
+    await creation.generate();
+    await creation.expectGenerationComplete();
+    await creation.expectBundleCount(2);
+
+    // Download both bundles
+    const aliceData = await creation.downloadBundle(0);
+    const bobData = await creation.downloadBundle(1);
+    expect(aliceData).toBeTruthy();
+    expect(bobData).toBeTruthy();
+
+    // Save and extract bundles
+    const bundlesDir = path.join(tmpDir, 'roundtrip-bundles');
+    fs.mkdirSync(bundlesDir, { recursive: true });
+
+    const aliceZipPath = path.join(bundlesDir, 'bundle-alice.zip');
+    fs.writeFileSync(aliceZipPath, aliceData!);
+    const aliceZip = new AdmZip(aliceZipPath);
+    const aliceDir = path.join(bundlesDir, 'alice');
+    aliceZip.extractAllTo(aliceDir, true);
+
+    const bobZipPath = path.join(bundlesDir, 'bundle-bob.zip');
+    fs.writeFileSync(bobZipPath, bobData!);
+    const bobZip = new AdmZip(bobZipPath);
+    const bobDir = path.join(bundlesDir, 'bob');
+    bobZip.extractAllTo(bobDir, true);
+
+    // Open Alice's recover.html (share + manifest pre-loaded)
+    const recovery = new RecoveryPage(page, aliceDir);
+    await recovery.open();
+    await recovery.expectShareCount(1);
+
+    // Add Bob's share — triggers auto-recovery
+    await recovery.addShares(bobDir);
+
+    // Recovery should complete
+    await recovery.expectRecoveryComplete();
+    await recovery.expectFileCount(2);
+    await recovery.expectDownloadVisible();
   });
 });

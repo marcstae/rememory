@@ -97,7 +97,7 @@ test.describe('Time-lock: maker.html advanced options', () => {
     expect(oneWeekText).toBeTruthy();
   });
 
-  test('tlock bundle creation works fully offline (no network calls)', async ({ page }, testInfo) => {
+  test('tlock bundle creation works fully offline @cross-browser', async ({ page }, testInfo) => {
     testInfo.setTimeout(120000);
 
     // Network is blocked by the offline-by-default fixture.
@@ -157,7 +157,7 @@ test.describe('Time-lock: maker.html bundle creation and recovery with tlock', (
     }
   });
 
-  test('create tlock bundle and recover after unlock time', async ({ page }, testInfo) => {
+  test('create tlock bundle and recover after unlock time @cross-browser', async ({ page }, testInfo) => {
     // This test hits the real drand network — give it plenty of time
     testInfo.setTimeout(180000);
 

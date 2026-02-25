@@ -1,34 +1,18 @@
 import { test, expect } from './fixtures';
-import { execFileSync } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { getRememoryBin } from './helpers';
+import { getRememoryBin, getDocsHtml, getDocsEsHtml } from './helpers';
 
 test.describe('Documentation Page', () => {
-  let tmpDir: string;
   let docsPath: string;
   let docsEsPath: string;
 
   test.beforeAll(async () => {
-    const bin = getRememoryBin();
-    if (!fs.existsSync(bin)) {
+    if (!fs.existsSync(getRememoryBin())) {
       test.skip();
       return;
     }
-
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rememory-docs-'));
-    docsPath = path.join(tmpDir, 'docs.html');
-    docsEsPath = path.join(tmpDir, 'docs.es.html');
-
-    execFileSync(bin, ['html', 'docs', '-o', docsPath], { stdio: 'inherit' });
-    execFileSync(bin, ['html', 'docs', '--lang', 'es', '-o', docsEsPath], { stdio: 'inherit' });
-  });
-
-  test.afterAll(async () => {
-    if (tmpDir) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
+    docsPath = getDocsHtml();
+    docsEsPath = getDocsEsHtml();
   });
 
   test('docs.html loads with TOC and sections', async ({ page }) => {
