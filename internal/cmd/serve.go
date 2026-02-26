@@ -75,6 +75,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		DataDir:         dataDir,
 		MaxManifestSize: maxSize,
 		Version:         version,
+		BuildDate:       buildDate,
 	})
 	if err != nil {
 		return fmt.Errorf("starting server: %w", err)

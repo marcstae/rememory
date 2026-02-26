@@ -189,6 +189,7 @@ declare global {
     // Embedded constants
     WASM_BINARY?: string;
     VERSION?: string;
+    BUILD_DATE?: string;
     MAX_TOTAL_FILE_SIZE?: number;
 
     // Localized README filenames (embedded in recover.html)

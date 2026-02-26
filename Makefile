@@ -2,7 +2,8 @@
 
 BINARY := rememory
 VERSION := $(shell cat VERSION 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+BUILD_DATE := $(shell date -u +%Y-%m-%d)
+LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -X main.buildDate=$(BUILD_DATE)"
 
 # Build WASM module first, then the main binary
 build: wasm

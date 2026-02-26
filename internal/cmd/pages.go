@@ -28,6 +28,7 @@ func generatePages(p *project.Project) error {
 	// Generate recover.html for static hosting.
 	// Tlock support is always included so the page can handle any manifest type.
 	html.SetVersion(version)
+	html.SetBuildDate(buildDate)
 	recoverHTML := html.GenerateRecoverHTML(nil, html.RecoverHTMLOptions{
 		StaticHosted: true,
 	})

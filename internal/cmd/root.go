@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+	"time"
+
 	"github.com/spf13/cobra"
 )
 
-// version is set at build time via -ldflags
+// version and buildDate are set at build time via -ldflags
 var version = "dev"
+var buildDate = ""
 
 var rootCmd = &cobra.Command{
 	Use:   "rememory",
@@ -18,10 +23,31 @@ Seal the manifest:   rememory seal
 Recover from shares: rememory recover bundle-alice.zip bundle-bob.zip`,
 }
 
-func Execute(v string) error {
+func Execute(v, bd string) error {
 	version = v
+	buildDate = bd
 	rootCmd.Version = v
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err == nil {
+		checkBuildAge()
+	}
+	return err
+}
+
+// checkBuildAge prints a gentle nudge to stderr if the build is more than 6 months old.
+func checkBuildAge() {
+	if buildDate == "" {
+		return
+	}
+	built, err := time.Parse("2006-01-02", buildDate)
+	if err != nil {
+		return
+	}
+	if time.Since(built) < 180*24*time.Hour {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\n%s You're running version %s, from %s.\n", yellow("A newer version may be available."), version, buildDate)
+	fmt.Fprintf(os.Stderr, "  Check https://github.com/eljojo/rememory/releases/latest\n\n")
 }
 
 // Color helpers (ANSI escape codes)

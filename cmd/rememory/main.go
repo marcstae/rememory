@@ -7,9 +7,10 @@ import (
 )
 
 var version = "dev"
+var buildDate = ""
 
 func main() {
-	if err := cmd.Execute(version); err != nil {
+	if err := cmd.Execute(version, buildDate); err != nil {
 		os.Exit(1)
 	}
 }

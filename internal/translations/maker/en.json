@@ -88,6 +88,10 @@
   "how_security_encryption": "Protected with age encryption",
   "how_security_opensource": "Open source (Apache-2.0)",
 
+  "update_nudge_title": "A newer version may be available",
+  "update_nudge_message": "You're running version {0}, from {1}.",
+  "update_nudge_action": "Check for updates",
+
   "saved_to_server": "Saved to server.",
   "save_to_server_error": "Could not save to server: {0}",
   "go_to_home": "Go to home page"

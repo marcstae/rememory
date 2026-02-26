@@ -42,8 +42,9 @@ func applyLayout(opts LayoutOptions) string {
 	}
 	html = strings.Replace(html, "{{LOGO_HREF}}", logoHref, 1)
 
-	// Replace version and GitHub URLs
+	// Replace version, build date, and GitHub URLs
 	html = strings.Replace(html, "{{VERSION}}", pkgVersion, -1)
+	html = strings.Replace(html, "{{BUILD_DATE}}", pkgBuildDate, -1)
 	html = strings.Replace(html, "{{GITHUB_REPO}}", core.GitHubRepo, -1)
 	html = strings.Replace(html, "{{GITHUB_PAGES}}", core.GitHubPages, -1)
 	html = strings.Replace(html, "{{GITHUB_URL}}", githubURL(), -1)

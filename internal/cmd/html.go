@@ -48,6 +48,7 @@ func runHTML(cmd *cobra.Command, args []string) error {
 	subcommand := args[0]
 
 	html.SetVersion(version)
+	html.SetBuildDate(buildDate)
 
 	var content string
 

@@ -168,7 +168,39 @@ declare const __SELFHOSTED__: boolean;
   // Initialization
   // ============================================
 
+  function checkBuildAge(): void {
+    const buildDate = window.BUILD_DATE;
+    if (!buildDate || buildDate === 'dev' || buildDate === '') return;
+
+    // Don't show on GitHub Pages (always up to date)
+    if (window.location.hostname === 'eljojo.github.io') return;
+
+    // Don't show on selfhosted (server operator manages updates)
+    if (__SELFHOSTED__) return;
+
+    const built = new Date(buildDate + 'T00:00:00Z');
+    if (isNaN(built.getTime())) return;
+
+    const now = new Date();
+    const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000; // ~180 days
+    if (now.getTime() - built.getTime() < sixMonths) return;
+
+    toast.show({
+      type: 'info',
+      title: t('update_nudge_title'),
+      message: t('update_nudge_message', window.VERSION || 'dev', buildDate),
+      duration: 0,
+      actions: [{
+        id: 'check-updates',
+        label: t('update_nudge_action'),
+        primary: true,
+        onClick: () => window.open('https://github.com/eljojo/rememory/releases/latest', '_blank'),
+      }],
+    });
+  }
+
   async function init(): Promise<void> {
+    checkBuildAge();
     setupAnonymousMode();
     setupCustomLanguage();
     setupImport();

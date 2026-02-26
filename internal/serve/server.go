@@ -17,6 +17,7 @@ type Config struct {
 	DataDir         string
 	MaxManifestSize int // Maximum MANIFEST.age size in bytes
 	Version         string
+	BuildDate       string
 }
 
 // Server implements http.Handler for the self-hosted ReMemory web app.
@@ -35,6 +36,7 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	html.SetVersion(cfg.Version)
+	html.SetBuildDate(cfg.BuildDate)
 
 	s := &Server{
 		store:           store,

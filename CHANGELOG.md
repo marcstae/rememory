@@ -4,6 +4,8 @@ All notable changes to ReMemory are documented here.
 
 ## Unreleased
 
+- **Update nudge** — The CLI and web maker now gently let you know if you're running a version built more than six months ago, with a link to check for updates. No network calls — it just compares the build date to your clock.
+
 ## v0.0.16 — 2026-02-25
 
 - **Time-delayed recovery** — You can now set a waiting period when creating bundles. Even if your friends combine their pieces early, the files stay locked until the date you chose. Uses the [League of Entropy](https://www.cloudflare.com/en-ca/leagueofentropy/) — a distributed randomness beacon run by organizations around the world, not a single company. This is experimental: recovery requires a brief internet connection, and relies on the beacon continuing to operate. CLI: `rememory seal --timelock 30d`. Also available in the web maker under "Advanced options."

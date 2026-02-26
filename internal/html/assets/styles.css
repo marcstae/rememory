@@ -938,6 +938,15 @@ footer a:hover {
   background: var(--error-dark);
 }
 
+.toast-info .toast-action-primary {
+  background: var(--info-text);
+  color: var(--paper-light);
+}
+
+.toast-info .toast-action-primary:hover {
+  background: #3A5A68;
+}
+
 .toast-close {
   position: absolute;
   top: 0.5rem;
