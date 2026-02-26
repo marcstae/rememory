@@ -1,11 +1,12 @@
-// SHA-256 hashing utilities using Web Crypto API
+// SHA-256 hashing utilities using @noble/hashes (pure JS, works in any context)
+
+import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 
 /**
  * Compute SHA-256 hash of data.
  */
 export async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  const hash = await crypto.subtle.digest('SHA-256', data as BufferSource);
-  return new Uint8Array(hash);
+  return nobleSha256(data);
 }
 
 /**
