@@ -126,6 +126,7 @@ func GenerateMakerHTML(createWASMBytes []byte, opts MakerHTMLOptions) string {
   <script nonce="{{CSP_NONCE}}">
     window.WASM_BINARY = "` + createWASMB64 + `";
     window.VERSION = "{{VERSION}}";
+    window.BUILD_DATE = "{{BUILD_DATE}}";
     window.SELFHOSTED_CONFIG = ` + selfhostedConfigJSON + `;
     window.MAX_TOTAL_FILE_SIZE = ` + maxTotalFileSize + `;
   </script>`)

@@ -86,5 +86,9 @@
   "how_security_local": "Alles läuft in deinem Browser — nichts verlässt dein Gerät",
   "how_security_offline": "Diese Seite funktioniert offline — speichere sie mit Datei › Speichern unter",
   "how_security_encryption": "Geschützt mit age-Verschlüsselung",
-  "how_security_opensource": "Open Source (Apache-2.0)"
+  "how_security_opensource": "Open Source (Apache-2.0)",
+
+  "update_nudge_title": "Eine neuere Version ist möglicherweise verfügbar",
+  "update_nudge_message": "Du verwendest Version {0} vom {1}.",
+  "update_nudge_action": "Nach Updates suchen"
 }

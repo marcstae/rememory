@@ -86,5 +86,9 @@
   "how_security_local": "Todo ocurre en tu navegador — nada sale de tu dispositivo",
   "how_security_offline": "Esta página funciona sin conexión — guárdala con Archivo › Guardar como",
   "how_security_encryption": "Protegido con cifrado age",
-  "how_security_opensource": "Código abierto (Apache-2.0)"
+  "how_security_opensource": "Código abierto (Apache-2.0)",
+
+  "update_nudge_title": "Puede haber una versión más reciente",
+  "update_nudge_message": "Estás usando la versión {0}, de {1}.",
+  "update_nudge_action": "Buscar actualizaciones"
 }

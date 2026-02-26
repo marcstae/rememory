@@ -86,5 +86,9 @@
   "how_security_local": "Tout se passe dans votre navigateur — rien ne quitte votre appareil",
   "how_security_offline": "Cette page fonctionne hors ligne — enregistrez-la avec Fichier › Enregistrer sous",
   "how_security_encryption": "Protégé par le chiffrement age",
-  "how_security_opensource": "Open source (Apache-2.0)"
+  "how_security_opensource": "Open source (Apache-2.0)",
+
+  "update_nudge_title": "Une version plus récente est peut-être disponible",
+  "update_nudge_message": "Vous utilisez la version {0}, du {1}.",
+  "update_nudge_action": "Vérifier les mises à jour"
 }

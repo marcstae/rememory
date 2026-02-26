@@ -86,5 +86,9 @@
   "how_security_local": "所有操作都在你的瀏覽器中進行 — 不會離開你的裝置",
   "how_security_offline": "這個頁面可以離線使用 — 用檔案 › 另存新檔儲存",
   "how_security_encryption": "使用 age 加密保護",
-  "how_security_opensource": "開放原始碼 (Apache-2.0)"
+  "how_security_opensource": "開放原始碼 (Apache-2.0)",
+
+  "update_nudge_title": "可能有更新的版本",
+  "update_nudge_message": "目前使用版本 {0}，建立於 {1}。",
+  "update_nudge_action": "檢查更新"
 }

@@ -86,5 +86,9 @@
   "how_security_local": "Vse poteka v vašem brskalniku — nič ne zapusti vaše naprave",
   "how_security_offline": "Ta stran deluje brez povezave — shranite jo z Datoteka › Shrani kot",
   "how_security_encryption": "Zaščiteno s šifriranjem age",
-  "how_security_opensource": "Odprtokodno (Apache-2.0)"
+  "how_security_opensource": "Odprtokodno (Apache-2.0)",
+
+  "update_nudge_title": "Morda je na voljo novejša različica",
+  "update_nudge_message": "Uporabljate različico {0} iz {1}.",
+  "update_nudge_action": "Preveri posodobitve"
 }
