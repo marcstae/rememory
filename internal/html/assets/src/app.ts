@@ -224,6 +224,14 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       );
     },
 
+    mismatchedShare(_detail: string): void {
+      toast.error(
+        t('error_mismatch_title'),
+        t('error_mismatch_message'),
+        t('error_mismatch_guidance')
+      );
+    },
+
     fileReadFailed(filename: string): void {
       showError(
         t('error_file_read_message', filename),
@@ -522,6 +530,28 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     if (state.shares.some(s => s.index === share.index)) {
       if (!quiet) errorHandlers.duplicateShare(share.index);
       return false;
+    }
+
+    // Check for metadata mismatches against existing shares
+    if (state.shares.length > 0) {
+      const first = state.shares[0];
+
+      if (share.version !== first.version) {
+        errorHandlers.mismatchedShare('version');
+        return false;
+      }
+      if (first.total > 0 && first.threshold > 0 &&
+          (share.total !== first.total || share.threshold !== first.threshold)) {
+        errorHandlers.mismatchedShare('metadata');
+        return false;
+      }
+      if (share.created) {
+        const withTimestamp = state.shares.find(s => s.created);
+        if (withTimestamp && share.created !== withTimestamp.created) {
+          errorHandlers.mismatchedShare('created');
+          return false;
+        }
+      }
     }
 
     if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {

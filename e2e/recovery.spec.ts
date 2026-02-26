@@ -236,6 +236,33 @@ test.describe('Browser Recovery Tool', () => {
     await recovery.expectShareCount(1); // Still 1, duplicate ignored
   });
 
+  test('rejects share from a different set', async ({ page }) => {
+    // Create a project with 5 friends so total (5) differs from the standard project (3)
+    const fiveFriendProject = createTestProject({
+      friends: [
+        { name: 'Alice', email: 'a@test.com' },
+        { name: 'Bob', email: 'b@test.com' },
+        { name: 'Carol', email: 'c@test.com' },
+        { name: 'Dan', email: 'd@test.com' },
+        { name: 'Eve', email: 'e@test.com' },
+      ],
+      threshold: 3,
+    });
+    const fiveFriendBundlesDir = path.join(fiveFriendProject, 'output', 'bundles');
+    const mismatchedBobDir = extractBundle(fiveFriendBundlesDir, 'Bob');
+
+    const aliceDir = extractBundle(bundlesDir, 'Alice');
+    const recovery = new RecoveryPage(page, aliceDir);
+
+    await recovery.open();
+    await recovery.expectShareCount(1); // Alice pre-loaded (total=3, threshold=2)
+
+    // Bob's share is from a 5-friend project (total=5, threshold=3) — metadata mismatch
+    await recovery.addShares(mismatchedBobDir);
+    await recovery.expectShareCount(1); // Still 1, mismatched share rejected
+    await expect(page.locator('.toast-error')).toContainText("Pieces don't match");
+  });
+
   test.skip('retry after decryption failure keeps holder pre-loaded share', async ({ page }) => {
     // TODO: This test needs to be redesigned. The current approach of mixing
     // personalized shares (Alice) with mismatched shares (Bob) doesn't reliably

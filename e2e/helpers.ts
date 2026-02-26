@@ -139,6 +139,8 @@ export function generateStandaloneHTML(tmpDir: string, type: 'recover' | 'create
 // Options for test project creation
 interface TestProjectOptions {
   noEmbedManifest?: boolean;
+  friends?: { name: string; email: string }[];
+  threshold?: number;
 }
 
 // Cache for test projects within the same worker process.
@@ -149,7 +151,10 @@ const cachedPaths = new Set<string>();
 const globalSetupPaths = new Set<string>();
 
 function cacheKey(options: TestProjectOptions): string {
-  return options.noEmbedManifest ? 'standard-no-embed' : 'standard';
+  const parts = [options.noEmbedManifest ? 'no-embed' : 'standard'];
+  if (options.friends) parts.push(`f${options.friends.length}`);
+  if (options.threshold) parts.push(`t${options.threshold}`);
+  return parts.join('-');
 }
 
 // Create a sealed test project with bundles (cached per config within a worker)
@@ -160,14 +165,16 @@ export function createTestProject(options: TestProjectOptions = {}): string {
     return cached;
   }
 
-  // Use pre-created project from global setup when available
-  const shared = getSharedSetup();
-  if (shared) {
-    const sharedPath = options.noEmbedManifest ? shared.noEmbedProject : shared.standardProject;
-    if (sharedPath && fs.existsSync(sharedPath)) {
-      projectCache.set(key, sharedPath);
-      globalSetupPaths.add(sharedPath);
-      return sharedPath;
+  // Use pre-created project from global setup when available (only for default config)
+  if (!options.friends && !options.threshold) {
+    const shared = getSharedSetup();
+    if (shared) {
+      const sharedPath = options.noEmbedManifest ? shared.noEmbedProject : shared.standardProject;
+      if (sharedPath && fs.existsSync(sharedPath)) {
+        projectCache.set(key, sharedPath);
+        globalSetupPaths.add(sharedPath);
+        return sharedPath;
+      }
     }
   }
 
@@ -175,10 +182,17 @@ export function createTestProject(options: TestProjectOptions = {}): string {
   const projectDir = path.join(tmpDir, 'test-project');
   const bin = getRememoryBin();
 
-  // Create project with 3 friends, threshold 2
+  const friends = options.friends || [
+    { name: 'Alice', email: 'alice@test.com' },
+    { name: 'Bob', email: 'bob@test.com' },
+    { name: 'Carol', email: 'carol@test.com' },
+  ];
+  const threshold = options.threshold || 2;
+  const friendArgs = friends.flatMap(f => ['--friend', `${f.name},${f.email}`]);
+
   execFileSync(bin, [
-    'init', projectDir, '--name', 'E2E Test', '--threshold', '2',
-    '--friend', 'Alice,alice@test.com', '--friend', 'Bob,bob@test.com', '--friend', 'Carol,carol@test.com',
+    'init', projectDir, '--name', 'E2E Test', '--threshold', String(threshold),
+    ...friendArgs,
   ], { stdio: 'inherit' });
 
   // Add secret content

@@ -5,6 +5,7 @@ All notable changes to ReMemory are documented here.
 ## Unreleased
 
 - **Update nudge** — The CLI and web maker now gently let you know if you're running a version built more than six months ago, with a link to check for updates. No network calls — it just compares the build date to your clock.
+- **Mismatched piece detection** — Adding a piece from a different set now shows a clear error right away, instead of failing later with a generic decryption message.
 
 ## v0.0.16 — 2026-02-25
 

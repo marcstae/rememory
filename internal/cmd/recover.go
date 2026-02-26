@@ -92,22 +92,11 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate shares are compatible
-	if len(shares) == 0 {
-		return fmt.Errorf("no shares provided")
+	if err := validateSharesCompatible(shares); err != nil {
+		return err
 	}
 
 	first := shares[0]
-	for i, share := range shares[1:] {
-		if share.Version != first.Version {
-			return fmt.Errorf("share %d has different version (v%d vs v%d) — all shares must be from the same bundle", i+2, share.Version, first.Version)
-		}
-		if share.Total != first.Total {
-			return fmt.Errorf("share %d has different total (%d vs %d)", i+2, share.Total, first.Total)
-		}
-		if share.Threshold != first.Threshold {
-			return fmt.Errorf("share %d has different threshold (%d vs %d)", i+2, share.Threshold, first.Threshold)
-		}
-	}
 
 	// Check we have enough shares
 	if len(shares) < first.Threshold {
@@ -279,6 +268,34 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("listing recovered files: %w", err)
+	}
+
+	return nil
+}
+
+func validateSharesCompatible(shares []*core.Share) error {
+	if len(shares) == 0 {
+		return fmt.Errorf("no shares provided")
+	}
+
+	first := shares[0]
+	for i, share := range shares[1:] {
+		if share.Version != first.Version {
+			return fmt.Errorf("share %d has different version (v%d vs v%d) — all shares must be from the same bundle", i+2, share.Version, first.Version)
+		}
+		if share.Total != first.Total {
+			return fmt.Errorf("share %d has different total (%d vs %d)", i+2, share.Total, first.Total)
+		}
+		if share.Threshold != first.Threshold {
+			return fmt.Errorf("share %d has different threshold (%d vs %d)", i+2, share.Threshold, first.Threshold)
+		}
+		if !share.Created.IsZero() {
+			for _, prev := range shares[:i+1] {
+				if !prev.Created.IsZero() && !share.Created.Equal(prev.Created) {
+					return fmt.Errorf("share %d has different creation time — shares may be from different operations", i+2)
+				}
+			}
+		}
 	}
 
 	return nil

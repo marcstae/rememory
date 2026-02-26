@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/eljojo/rememory/internal/core"
 	"github.com/eljojo/rememory/internal/project"
 )
 
@@ -64,5 +67,17 @@ func TestFriendNames(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("friendNames(%v) = %q, want %q", tt.friends, result, tt.expected)
 		}
+	}
+}
+
+func TestValidateSharesCompatible_CreatedMismatchWhenFirstHasNoTimestamp(t *testing.T) {
+	now := time.Now()
+	a := &core.Share{Version: 2, Total: 3, Threshold: 2} // no timestamp (QR)
+	b := &core.Share{Version: 2, Total: 3, Threshold: 2, Created: now}
+	c := &core.Share{Version: 2, Total: 3, Threshold: 2, Created: now.Add(-time.Hour)}
+
+	err := validateSharesCompatible([]*core.Share{a, b, c})
+	if err == nil || !strings.Contains(err.Error(), "creation time") {
+		t.Errorf("expected creation time error, got: %v", err)
 	}
 }
