@@ -21,9 +21,11 @@
           ];
         };
 
+        versionFile = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
+
         rememory = pkgs.buildGoModule {
           pname = "rememory";
-          version = "0.1.0";
+          version = versionFile;
           src = ./.;
 
           vendorHash = "sha256-b5LSrwhujjMhsIErDYY22k7ZWiGl2zSMc5HcB1mqu0c=";
@@ -67,7 +69,7 @@
 
           subPackages = [ "cmd/rememory" ];
 
-          ldflags = [ "-s" "-w" "-X main.version=${self.shortRev or "dev"}" ];
+          ldflags = [ "-s" "-w" "-X main.version=${versionFile}" ];
         };
 
       in

@@ -1,7 +1,7 @@
-.PHONY: build test test-tlock test-e2e test-e2e-headed lint clean install wasm ts build-all bump-patch bump-minor bump-major man html serve demo demo-tlock generate-fixtures full update-pdf-png screenshots release check-translations
+.PHONY: build test test-tlock test-e2e test-e2e-headed lint clean install wasm ts build-all bump man html serve demo demo-tlock generate-fixtures full update-pdf-png screenshots release check-translations
 
 BINARY := rememory
-VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+VERSION := $(shell cat VERSION 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 
 # Build WASM module first, then the main binary
@@ -128,54 +128,46 @@ build-all: wasm
 	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/rememory-darwin-arm64 ./cmd/rememory
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/rememory-windows-amd64.exe ./cmd/rememory
 
-# Stamp the Unreleased section in CHANGELOG.md with the next patch version.
-# Run this before bump-patch to finalize the changelog for the release.
+# Stamp CHANGELOG, update VERSION, commit. Asks which bump type.
 release:
-	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	@current=$$(cat VERSION 2>/dev/null || echo "v0.0.0"); \
 	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
 	minor=$$(echo $$current | cut -d. -f2); \
 	patch=$$(echo $$current | cut -d. -f3); \
-	new="v$$major.$$minor.$$((patch + 1))"; \
+	echo "Current version: $$current"; \
+	echo "  1) patch — v$$major.$$minor.$$((patch + 1))"; \
+	echo "  2) minor — v$$major.$$((minor + 1)).0"; \
+	echo "  3) major — v$$((major + 1)).0.0"; \
+	printf "Which bump? [1] "; \
+	read choice; \
+	case "$${choice:-1}" in \
+		1) new="v$$major.$$minor.$$((patch + 1))" ;; \
+		2) new="v$$major.$$((minor + 1)).0" ;; \
+		3) new="v$$((major + 1)).0.0" ;; \
+		*) echo "Invalid choice"; exit 1 ;; \
+	esac; \
 	today=$$(date +%Y-%m-%d); \
 	if ! grep -q '^## Unreleased' CHANGELOG.md; then \
 		echo "No Unreleased section found in CHANGELOG.md"; exit 1; \
 	fi; \
 	perl -i -pe "s/^## Unreleased$$/## Unreleased\n\n## $$new — $$today/" CHANGELOG.md; \
-	git add CHANGELOG.md; \
+	printf '%s\n' "$$new" > VERSION; \
+	git add CHANGELOG.md VERSION; \
 	git commit -m "Release $$new"; \
-	echo "Stamped changelog and committed. Now run: make bump-patch"
+	echo "Done. Run 'make bump' to tag and push."
 
-# Bump version tags (usage: make bump-patch, bump-minor, bump-major)
-bump-patch:
-	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
-	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
-	minor=$$(echo $$current | cut -d. -f2); \
-	patch=$$(echo $$current | cut -d. -f3); \
-	new="v$$major.$$minor.$$((patch + 1))"; \
-	echo "Bumping $$current -> $$new"; \
-	git tag -a $$new -m "Release $$new"; \
-	git push origin $$new
-
-bump-minor:
-	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
-	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
-	minor=$$(echo $$current | cut -d. -f2); \
-	new="v$$major.$$((minor + 1)).0"; \
-	echo "Bumping $$current -> $$new"; \
-	git tag -a $$new -m "Release $$new"; \
-	git push origin $$new
-
-bump-major:
-	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
-	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
-	new="v$$((major + 1)).0.0"; \
-	echo "Bumping $$current -> $$new"; \
-	git tag -a $$new -m "Release $$new"; \
-	git push origin $$new
+# Tag the current VERSION and optionally push.
+bump:
+	@version=$$(cat VERSION 2>/dev/null); \
+	if [ -z "$$version" ]; then echo "VERSION file missing"; exit 1; fi; \
+	echo "Tagging $$version"; \
+	git tag -a $$version -m "Release $$version"; \
+	printf "Push to origin? [Y/n] "; \
+	read push; \
+	case "$${push:-y}" in \
+		[Yy]*) git push origin $$version ;; \
+		*) echo "Tag created locally. Push with: git push origin $$version" ;; \
+	esac
 
 # Generate PNG screenshots from demo PDF pages (requires pdftoppm from poppler)
 update-pdf-png: build
