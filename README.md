@@ -309,4 +309,9 @@ Built on:
 - [tlock](https://github.com/drand/tlock) — Time-lock encryption via drand
 - [Cobra](https://github.com/spf13/cobra) — CLI framework
 
+Translations by:
+- Slovenščina — [@h200101](https://github.com/h200101)
+- Português — [@Kasama](https://github.com/Kasama)
+- 中文（台灣）— [@JasonHK](https://github.com/JasonHK)
+
 The protocol was [originally designed in a Google Doc](https://docs.google.com/document/d/1B4_wIN3fXqb67Tln0v5v2pMRFf8v5umkKikaqCRAdyM/edit?usp=sharing) in 2023.
