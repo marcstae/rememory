@@ -10,7 +10,9 @@ declare global {
 
 export interface BundleContents {
   share?: string; // README.txt content containing the share (for ZIP)
+  readme?: string; // README.txt content (alias for share, used by handleBundleZipUnified)
   manifest?: Uint8Array; // MANIFEST.age content if present
+  html?: string; // recover.html content if present in ZIP
   // For HTML extraction
   holderShare?: string; // PEM-encoded share from personalization
   holder?: string; // Holder name from personalization
@@ -108,14 +110,30 @@ export function extractBundle(data: Uint8Array): BundleContents {
     }
   }
 
+  // Also try README.pdf text extraction as fallback
   if (!readmeContent) {
-    const foundFiles = Object.keys(files).join(', ');
-    throw new Error(`README file not found in bundle. Found: ${foundFiles}`);
+    for (const [name, fileData] of Object.entries(files)) {
+      const basename = name.split('/').pop() || name;
+      const upperBase = basename.toUpperCase();
+      for (const readmeName of readmeNames) {
+        if (upperBase === `${readmeName.toUpperCase()}.PDF`) {
+          readmeContent = new TextDecoder().decode(fileData);
+          break;
+        }
+      }
+      if (readmeContent) break;
+    }
   }
+
+  const recoverHtmlContent = recoverHtmlData
+    ? new TextDecoder().decode(recoverHtmlData)
+    : undefined;
 
   return {
     share: readmeContent,
+    readme: readmeContent,
     manifest: manifestData,
+    html: recoverHtmlContent,
   };
 }
 

@@ -122,7 +122,7 @@ Note: In a real project, these would be your actual sensitive credentials.
 	timelockStr, _ := cmd.Flags().GetString("timelock")
 	pages, _ := cmd.Flags().GetBool("pages")
 
-	if err := sealProject(p, "", false, timelockStr); err != nil {
+	if err := sealProject(p, false, timelockStr); err != nil {
 		return err
 	}
 

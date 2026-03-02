@@ -1,81 +1,120 @@
-    <div class="page-intro">
-      <h1 data-i18n="title">Recover Files</h1>
-      <p class="subtitle" data-i18n="subtitle">Bring together the pieces your friends kept safe.</p>
-      <p class="summary" data-i18n="page_description">Each friend received a bundle with one piece of the key. Gather enough pieces below, add the encrypted archive, and your files will be decrypted here in the browser. Nothing leaves your device.</p>
-    </div>
-
-    <!-- Step 1: Collect Shares -->
-    <div class="card">
-      <h2><span class="step-number">1</span> <span data-i18n="step1_title">Gather the pieces</span></h2>
-      <div id="share-drop-zone" class="drop-zone" tabindex="0" aria-label="Share file drop zone">
-        <p data-i18n="step1_drop">Drop README.txt files here, or click to choose them</p>
-        <small data-i18n="step1_hint">Each file holds one person's piece</small>
-      </div>
-      <input type="file" id="share-file-input" accept=".txt,.zip" multiple>
-
-      <div class="paste-section">
-        <button id="paste-toggle-btn" class="btn btn-secondary" type="button">
-          <span>&#128203;</span> <span data-i18n="paste_btn">Paste a piece or type recovery words</span>
-        </button>
-        <button id="scan-qr-btn" class="btn btn-secondary hidden" type="button">
-          <span>&#128247;</span> <span data-i18n="scan_btn">Scan QR code</span>
-        </button>
-        <div id="paste-area" class="paste-area hidden">
-          <textarea id="paste-input" placeholder="Paste share text or type your 25 recovery words here..." data-i18n-placeholder="paste_placeholder" rows="6"></textarea>
-          <button id="paste-submit-btn" class="btn btn-primary" type="button" data-i18n="paste_submit">Add piece</button>
+    <!-- Wizard: Welcome -->
+    <div id="wiz-welcome" class="wizard-screen">
+      <div class="page-intro">
+        <h1 data-i18n="title">Recover Files</h1>
+        <p class="subtitle" data-i18n="subtitle">Bring together the pieces your friends kept safe.</p>
+        <p class="summary" data-i18n="page_description">When you have enough pieces, your files unlock automatically. Everything happens here in your browser — nothing leaves your device.</p>
+        <div id="wiz-welcome-info" class="wiz-welcome-info hidden"></div>
+        <div class="wiz-actions">
+          <button id="wiz-begin-btn" class="btn btn-primary" data-i18n="wiz_begin">Begin</button>
         </div>
       </div>
-
-      <div id="shares-list" class="shares-list"></div>
-
-      <!-- Contact list for other friends (populated via JS if personalization data exists) -->
-      <div id="contact-list-section" class="contact-list-section hidden">
-        <h3 data-i18n="contact_list">Contact the others</h3>
-        <p class="hint" data-i18n="contact_list_hint">Reach out to these friends to gather their pieces</p>
-        <div id="contact-list" class="contact-list"></div>
-      </div>
-
-      <div id="threshold-info" class="threshold-info hidden"></div>
     </div>
 
-    <!-- Step 2: Load Manifest -->
-    <div class="card">
-      <h2><span class="step-number">2</span> <span data-i18n="step2_title">Add the encrypted archive</span></h2>
-      <div id="manifest-drop-zone" class="drop-zone" tabindex="0" aria-label="Encrypted archive drop zone">
-        <p data-i18n="step2_drop">Drop a recover.html or MANIFEST.age here, or click to choose it</p>
-        <small data-i18n="step2_hint">Use a recover.html from any friend's bundle, or the MANIFEST.age file</small>
-      </div>
-      <input type="file" id="manifest-file-input" accept=".age,.html,.htm,.zip">
-
-      <div id="manifest-status" class="manifest-status hidden">
-        <span class="icon">&#128196;</span>
-        <div data-i18n="no_manifest">No archive added yet</div>
-      </div>
-    </div>
-
-    <!-- Step 3: Recover -->
-    <div class="card">
-      <h2><span class="step-number">3</span> <span data-i18n="step3_title">Recover the files</span></h2>
-
-      {{TLOCK_WAITING_HTML}}
-
-      <div id="recover-section" class="recover-section">
-        <button id="recover-btn" class="btn btn-primary" disabled>
-          <span>&#128275;</span> <span data-i18n="decrypt_btn">Unlock &amp; Recover</span>
-        </button>
-
-        <div id="progress-bar" class="progress-bar hidden">
-          <div class="fill" style="width: 0%"></div>
+    <!-- Wizard: Contacts & Progress -->
+    <div id="wiz-contacts" class="wizard-screen hidden">
+      <div class="card">
+        <div id="wiz-progress" class="wiz-progress">
+          <div class="step-progress-bar"><div id="wiz-progress-fill" class="step-progress-fill"></div></div>
+          <div id="wiz-progress-text" class="step-progress-text"></div>
         </div>
+        <div id="wiz-contact-list" class="wiz-contact-list"></div>
+        <div class="wiz-actions">
+          <button id="wiz-add-piece-btn" class="btn btn-secondary" data-i18n="wiz_add_piece">Add a piece</button>
+        </div>
+      </div>
+    </div>
 
-        <p id="status-message" class="status-message" aria-live="polite"></p>
-
-        <div id="files-list" class="files-list"></div>
-
-        <div id="download-actions" class="download-actions hidden">
-          <button id="download-all-btn" class="btn btn-success">
-            <span>&#128229;</span> <span data-i18n="download_btn">Download archive (.tar.gz)</span>
+    <!-- Wizard: Add Piece (method selection + file/paste areas) -->
+    <div id="wiz-add-piece" class="wizard-screen hidden">
+      <div class="card">
+        <button id="wiz-back-contacts-btn" class="wiz-back-btn" type="button">&#8592; <span data-i18n="wiz_back">Back</span></button>
+        <h2 id="wiz-add-title"></h2>
+        <div id="wiz-methods" class="wiz-methods">
+          <button id="wiz-method-file-btn" class="wiz-method-card" type="button">
+            <span class="wiz-method-icon">&#128193;</span>
+            <div class="wiz-method-text">
+              <span class="wiz-method-label" data-i18n="wiz_method_file">Upload a file</span>
+              <span class="wiz-method-hint" data-i18n="wiz_method_file_hint">ZIP, README, or recover.html from their bundle</span>
+            </div>
           </button>
+          <button id="wiz-method-words-btn" class="wiz-method-card" type="button">
+            <span class="wiz-method-icon">&#128289;</span>
+            <div class="wiz-method-text">
+              <span class="wiz-method-label" data-i18n="wiz_method_words">Type recovery words</span>
+              <span class="wiz-method-hint" data-i18n="wiz_method_words_hint">25 words from their recovery sheet</span>
+            </div>
+          </button>
+          <button id="wiz-method-paste-btn" class="wiz-method-card" type="button">
+            <span class="wiz-method-icon">&#128203;</span>
+            <div class="wiz-method-text">
+              <span class="wiz-method-label" data-i18n="wiz_method_paste">Paste share text</span>
+              <span class="wiz-method-hint" data-i18n="wiz_method_paste_hint">The text between BEGIN and END markers</span>
+            </div>
+          </button>
+        </div>
+        <div id="wiz-file-area" class="wiz-sub-area hidden">
+          <div id="wiz-file-drop" class="drop-zone" tabindex="0" aria-label="File drop zone">
+            <p data-i18n="wiz_drop_file">Drop a file here, or click to choose</p>
+            <small data-i18n="step1_hint">README, bundle ZIP, or recover.html</small>
+          </div>
+          <input type="file" id="wiz-file-input" accept=".txt,.zip,.pdf,.html,.htm,.age" multiple>
+        </div>
+        <div id="wiz-paste-area" class="wiz-sub-area hidden">
+          <textarea id="wiz-paste-input" data-i18n-placeholder="paste_placeholder" rows="6" placeholder="Paste share text or type recovery words..."></textarea>
+          <div class="wiz-actions">
+            <button id="wiz-paste-submit-btn" class="btn btn-primary" type="button" data-i18n="paste_submit">Add piece</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wizard: Word Input -->
+    <div id="wiz-words" class="wizard-screen hidden">
+      <div class="card">
+        <button id="wiz-back-methods-btn" class="wiz-back-btn" type="button">&#8592; <span data-i18n="wiz_back">Back</span></button>
+        <h2 data-i18n="wiz_words_title">Type the recovery words</h2>
+        <p class="hint" data-i18n="wiz_words_hint">One word per field. Press space or tab to advance.</p>
+        <div id="wiz-word-grid" class="wiz-word-grid"></div>
+        <div id="wiz-words-error" class="wiz-words-error hidden"></div>
+        <div class="wiz-actions">
+          <button id="wiz-words-submit-btn" class="btn btn-primary" type="button" data-i18n="wiz_words_submit" disabled>Add this piece</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wizard: Recovery -->
+    <div id="wiz-recovery" class="wizard-screen hidden">
+      <div class="card">
+        <h2 id="wiz-recovery-title"><span data-i18n="step3_title">Recover the files</span></h2>
+
+        <div id="wiz-manifest-area" class="wiz-manifest-area hidden">
+          <p class="wiz-manifest-label" data-i18n="wiz_manifest_needed">Add the encrypted archive</p>
+          <p class="hint" data-i18n="wiz_manifest_hint">You need the MANIFEST.age file from one of the bundles.</p>
+          <div id="wiz-manifest-drop" class="drop-zone" tabindex="0" aria-label="Manifest drop zone">
+            <p data-i18n="wiz_drop_file">Drop a file here, or click to choose</p>
+            <small data-i18n="step2_hint">recover.html or MANIFEST.age</small>
+          </div>
+          <input type="file" id="wiz-manifest-input" accept=".age,.html,.htm,.zip">
+          <div id="wiz-manifest-status" class="manifest-status hidden"></div>
+        </div>
+
+        {{TLOCK_WAITING_HTML}}
+
+        <div id="recover-section" class="recover-section">
+          <div id="progress-bar" class="progress-bar hidden">
+            <div class="fill" style="width: 0%"></div>
+          </div>
+
+          <p id="status-message" class="status-message" aria-live="polite"></p>
+
+          <div id="files-list" class="files-list"></div>
+
+          <div id="download-actions" class="download-actions hidden">
+            <button id="download-all-btn" class="btn btn-success">
+              <span>&#128229;</span> <span data-i18n="download_btn">Download archive</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

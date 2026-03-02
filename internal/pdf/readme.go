@@ -3,12 +3,10 @@ package pdf
 import (
 	"bytes"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-pdf/fpdf"
-	qrcode "github.com/skip2/go-qrcode"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/eljojo/rememory/internal/core"
@@ -30,7 +28,6 @@ type ReadmeData struct {
 	RecoverChecksum  string
 	Created          time.Time
 	Anonymous        bool
-	RecoveryURL      string // Base URL for QR code (e.g. "https://example.com/recover.html")
 	Language         string // Bundle language (e.g. "en", "es"); defaults to "en"
 	ManifestEmbedded bool   // true when manifest is embedded in recover.html
 	TlockEnabled     bool   // true when manifest uses time-lock encryption
@@ -45,34 +42,27 @@ const (
 	smallMono   = 7.0
 )
 
-// bundleColors are soft, distinguishable colors used to give each friend's
-// printed PDF a unique visual identity. Indexed by (share.Index - 1) % len.
+// bundleColors give each friend's PDF a distinct visual identity.
+// More saturated than the web palette to stand out clearly on paper.
+// All dark enough for white text (perceived brightness < 130).
 var bundleColors = [][3]int{
-	{122, 143, 166}, // dusty blue
-	{85, 115, 90},   // sage
-	{166, 130, 100}, // warm tan
-	{140, 110, 140}, // muted plum
-	{110, 145, 140}, // teal
-	{180, 140, 100}, // amber
-	{120, 130, 160}, // slate
-	{155, 120, 120}, // dusty rose
-}
-
-// QR code size in mm on the PDF page.
-const qrSizeMM = 70.0
-
-// QRContent returns the string that will be encoded in the QR code.
-// Returns "URL#share=COMPACT". If RecoveryURL is not set, defaults to the production URL.
-func (d ReadmeData) QRContent() string {
-	compact := d.Share.CompactEncode()
-	recoveryURL := d.RecoveryURL
-	if recoveryURL == "" {
-		recoveryURL = core.DefaultRecoveryURL
-	}
-	return recoveryURL + "#share=" + url.QueryEscape(compact)
+	{55, 90, 155},  // cobalt blue
+	{40, 105, 60},  // forest green
+	{155, 95, 35},  // burnt amber
+	{120, 60, 135}, // plum
+	{30, 115, 110}, // deep teal
+	{160, 80, 35},  // terracotta
+	{80, 90, 160},  // slate blue
+	{160, 60, 80},  // rose
 }
 
 // GenerateReadme creates the README.pdf content.
+// The PDF is structured across five pages:
+//   - Page 1: Identity & overview (visual role paths, threshold rule, contacts)
+//   - Page 2: How to recover — browser (step by step)
+//   - Page 3: Your piece (recovery words in native language + English)
+//   - Page 4: Text format (machine-readable PEM block, easy to copy-paste)
+//   - Page 5: Fallback — command line tool + metadata
 func GenerateReadme(data ReadmeData) ([]byte, error) {
 	lang := data.Language
 	if lang == "" {
@@ -83,319 +73,271 @@ func GenerateReadme(data ReadmeData) ([]byte, error) {
 	}
 
 	p := fpdf.New("P", "mm", "A4", "")
-	p.SetMargins(20, 20, 20)
-	p.SetAutoPageBreak(true, 20)
+	// Top margin 30 to leave room for the 10mm header strip + breathing space.
+	p.SetMargins(20, 30, 20)
+	p.SetAutoPageBreak(true, 22)
 
-	// Register embedded UTF-8 TrueType fonts (DejaVu Sans)
 	registerUTF8Fonts(p)
 
-	// Bundle identity color — each friend gets a distinct strip
 	colorIdx := 0
 	if data.Share != nil && data.Share.Index > 0 {
 		colorIdx = (data.Share.Index - 1) % len(bundleColors)
 	}
 	bc := bundleColors[colorIdx]
 
-	// Page numbers — small, centered, low-key, with identity mark
-	p.SetFooterFunc(func() {
-		pw, _ := p.GetPageSize()
-		p.SetY(-15)
-		// Small identity mark before the page number
-		markW := 15.0
-		markH := 2.0
-		markX := (pw - markW) / 2
-		p.SetFillColor(bc[0], bc[1], bc[2])
-		p.Rect(markX, p.GetY()-1, markW, markH, "F")
-		p.SetFont(fontSans, "", 7)
-		p.SetTextColor(180, 180, 180)
-		p.CellFormat(0, 10, fmt.Sprintf("%d", p.PageNo()), "", 0, "C", false, 0, "")
-		p.SetTextColor(46, 42, 38)
-	})
-
-	p.AddPage()
-
-	// Page dimensions (used throughout for centered elements)
 	pageWidth, _ := p.GetPageSize()
-
-	// Identity strip at the top of the first page
-	p.SetFillColor(bc[0], bc[1], bc[2])
-	p.Rect(0, 0, pageWidth, 4, "F")
-
 	leftMargin, _, rightMargin, _ := p.GetMargins()
 	contentWidth := pageWidth - leftMargin - rightMargin
 
-	// ── Title area — certificate feel with breathing room ──
-	p.Ln(12)
+	// ── Header: color strip + holder identity on every page ──────────────────
+	p.SetHeaderFunc(func() {
+		p.SetFillColor(bc[0], bc[1], bc[2])
+		p.Rect(0, 0, pageWidth, 10, "F")
+		p.SetFont(fontSans, "B", 8)
+		p.SetTextColor(255, 255, 255)
+		p.SetXY(leftMargin, 2)
+		p.CellFormat(contentWidth, 6, data.Holder+" — "+t("title"), "", 0, "R", false, 0, "")
+		p.SetTextColor(46, 42, 38) // Reset cursor to top-left of content area so the first content line
+		// draws at the correct position regardless of where the header left off.
+		_, topMargin, _, _ := p.GetMargins()
+		p.SetXY(leftMargin, topMargin)
+	})
+
+	// ── Footer: page number ───────────────────────────────────────────────────
+	p.SetFooterFunc(func() {
+		p.SetY(-12)
+		p.SetFont(fontSans, "", 7)
+		p.SetTextColor(180, 180, 180)
+		p.CellFormat(0, 8, fmt.Sprintf("%d", p.PageNo()), "", 0, "C", false, 0, "")
+		p.SetTextColor(46, 42, 38)
+	})
+
+	shareText := data.Share.Encode()
+
+	// ══════════════════════════════════════════════════════════════════════════
+	// PAGE 1: Identity & Overview
+	// ══════════════════════════════════════════════════════════════════════════
+	p.AddPage()
+
+	// Title
+	p.Ln(5)
 	p.SetFont(fontSans, "B", titleSize)
+	p.SetTextColor(bc[0], bc[1], bc[2])
 	p.CellFormat(0, 12, t("title"), "", 1, "C", false, 0, "")
-	p.Ln(3)
-	// Decorative horizontal rule
-	p.SetDrawColor(180, 180, 180)
-	p.SetLineWidth(0.4)
-	ruleInset := 35.0
-	p.Line(leftMargin+ruleInset, p.GetY(), pageWidth-rightMargin-ruleInset, p.GetY())
-	p.Ln(4)
+	p.SetTextColor(46, 42, 38)
 	p.SetFont(fontSans, "", 14)
 	p.CellFormat(0, 8, t("for", data.Holder), "", 1, "C", false, 0, "")
-	p.Ln(12)
 
-	// ── What is this? — context first ──
-	p.SetFont(fontSans, "B", bodySize)
-	p.CellFormat(0, 6, t("what_is_this"), "", 1, "L", false, 0, "")
-	p.Ln(1)
-	addBody(p, t("what_bundle_for", data.ProjectName))
-	addBody(p, t("what_one_of", data.Total))
-	p.Ln(5)
-
-	// ── Warning stamp — soft, centered, calm ──
-	p.SetFillColor(232, 239, 234)
-	p.SetTextColor(46, 42, 38)
-	p.SetFont(fontSans, "B", headingSize)
-	p.CellFormat(0, 11, t("warning_title"), "", 1, "C", true, 0, "")
-	p.SetFillColor(232, 242, 234)
-	p.SetFont(fontSans, "", 9)
-	if data.Anonymous {
-		p.MultiCell(0, 5, t("warning_message_shares"), "", "C", true)
-	} else {
-		p.MultiCell(0, 5, t("warning_message_friends"), "", "C", true)
-	}
+	// Decorative rule in bundle color
+	p.SetDrawColor(bc[0], bc[1], bc[2])
+	p.SetLineWidth(0.8)
+	p.Ln(3)
+	p.Line(leftMargin+35, p.GetY(), pageWidth-rightMargin-35, p.GetY())
+	p.SetDrawColor(200, 200, 200)
+	p.SetLineWidth(0.2)
 	p.Ln(8)
 
-	// ── Recovery rule — prominent standalone box ──
-	p.SetFillColor(242, 242, 248)
-	p.SetDrawColor(140, 140, 160)
-	p.SetLineWidth(0.5)
-	ruleBoxY := p.GetY()
-	ruleBoxH := 20.0
-	p.Rect(leftMargin, ruleBoxY, contentWidth, ruleBoxH, "FD")
-	p.SetFont(fontSans, "", 9)
-	p.SetXY(leftMargin, ruleBoxY+2)
-	p.CellFormat(contentWidth, 5, t("recovery_rule"), "", 1, "C", false, 0, "")
-	p.SetFont(fontSans, "B", 18)
-	p.SetXY(leftMargin, ruleBoxY+8)
-	p.CellFormat(contentWidth, 10, t("recovery_rule_count", data.Threshold, data.Total), "", 1, "C", false, 0, "")
-	p.SetY(ruleBoxY + ruleBoxH + 8)
-	p.SetDrawColor(0, 0, 0)
-	p.SetLineWidth(0.2)
+	// ── Threshold box — the most important thing on the page ─────────────────
+	addThresholdBox(p, t("recovery_rule"), t("recovery_rule_count", data.Threshold, data.Total), leftMargin, contentWidth, bc)
+	p.Ln(8)
 
-	// ── Other share holders — contact card layout ──
+	// ── Visual role paths — "Why are you reading this?" ──────────────────────
+	// Three tinted boxes guide the reader to the right page immediately.
+	addPathBox(p, t("path1_title"), t("path1_body", data.ProjectName), leftMargin, contentWidth, bc)
+	p.Ln(3)
+	addPathBox(p, t("path2_title"), t("path2_body"), leftMargin, contentWidth, bc)
+	p.Ln(3)
+	addPathBox(p, t("path3_title"), t("path3_body"), leftMargin, contentWidth, bc)
+	p.Ln(6)
+
+	// ── Contact list ──────────────────────────────────────────────────────────
 	if !data.Anonymous {
-		addSection(p, t("other_holders"))
-		for i, friend := range data.OtherFriends {
+		addColorSection(p, t("other_holders"), bc)
+		for _, friend := range data.OtherFriends {
 			p.SetFont(fontSans, "B", bodySize)
 			if friend.Contact != "" {
-				nameStr := "   " + friend.Name + "  "
+				nameStr := "   " + friend.Name
 				nameW := p.GetStringWidth(nameStr)
 				p.CellFormat(nameW, 7, nameStr, "", 0, "L", false, 0, "")
 				p.SetFont(fontSans, "", bodySize)
-				p.CellFormat(0, 7, "\u2014  "+friend.Contact, "", 1, "L", false, 0, "")
+				p.CellFormat(0, 7, "  \u2014  "+friend.Contact, "", 1, "L", false, 0, "")
 			} else {
 				p.CellFormat(0, 7, "   "+friend.Name, "", 1, "L", false, 0, "")
 			}
-			if i < len(data.OtherFriends)-1 {
-				p.Ln(2)
-			}
 		}
-		p.Ln(8)
+		p.Ln(6)
 	}
 
-	// ── Sharing your share — procedure card with grey background ──
-	p.SetFillColor(245, 245, 245)
-	p.SetFont(fontSans, "B", headingSize)
-	p.CellFormat(0, 10, " "+t("sharing_title"), "", 1, "L", true, 0, "")
-	p.CellFormat(0, 2, "", "", 1, "", true, 0, "")
-	p.SetFont(fontSans, "", bodySize)
-	p.MultiCell(0, 5, " "+t("sharing_verify"), "", "L", true)
-	p.CellFormat(0, 3, "", "", 1, "", true, 0, "")
-	p.MultiCell(0, 5, "   \u2022 "+t("sharing_easiest"), "", "L", true)
-	p.MultiCell(0, 5, "   \u2022 "+t("sharing_readme_only"), "", "L", true)
-	p.MultiCell(0, 5, "   \u2022 "+t("sharing_words_phone"), "", "L", true)
-	p.MultiCell(0, 5, "   \u2022 "+t("sharing_qr_mail"), "", "L", true)
-	p.CellFormat(0, 3, "", "", 1, "", true, 0, "")
-	p.Ln(5)
+	// ══════════════════════════════════════════════════════════════════════════
+	// PAGE 2: Browser Recovery — step by step
+	// ══════════════════════════════════════════════════════════════════════════
+	p.AddPage()
+	addColorSection(p, t("recover_browser"), bc)
+	p.Ln(3)
 
-	// Section: Your Share (QR code + PEM block)
-	// Ensure the section header + QR code + caption + compact string stay together
-	qrBlockHeight := 10.0 + 2.0 + qrSizeMM + 3.0 + 5.0 + 2.0 + 4.0 // header + gap + QR + gap + caption + gap + compact
-	{
-		_, pageHeight := p.GetPageSize()
-		_, _, _, bottomMargin := p.GetMargins()
-		usableBottom := pageHeight - bottomMargin
-		if p.GetY()+qrBlockHeight > usableBottom {
-			p.AddPage()
+	const badgeIndent = 11.0 // mm offset for sub-content (badge 9mm + 2mm gap)
+	stepNum := 1
+	addStep := func(text string) {
+		// Strip leading "N. " from translation strings — the badge already shows the number.
+		if len(text) >= 3 && text[0] >= '1' && text[0] <= '9' && text[1] == '.' && text[2] == ' ' {
+			text = text[3:]
 		}
+		addStepRow(p, stepNum, text, leftMargin, contentWidth, bc)
+		stepNum++
 	}
-	addSection(p, t("your_share"))
-	p.Ln(2)
-
-	// Generate QR code PNG
-	qrContent := data.QRContent()
-	qrPNG, err := generateQRPNG(qrContent)
-	if err != nil {
-		return nil, fmt.Errorf("generating QR code: %w", err)
-	}
-
-	// Register QR image and place it centered
-	qrReader := bytes.NewReader(qrPNG)
-	opts := fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}
-	p.RegisterImageOptionsReader("qrcode", opts, qrReader)
-	qrX := leftMargin + (contentWidth-qrSizeMM)/2
-	p.ImageOptions("qrcode", qrX, p.GetY(), qrSizeMM, qrSizeMM, false, opts, 0, "")
-	p.SetY(p.GetY() + qrSizeMM + 3)
-
-	// Caption under QR code
-	p.SetFont(fontSans, "I", bodySize)
-	p.CellFormat(0, 5, t("qr_caption"), "", 1, "C", false, 0, "")
-	p.Ln(2)
-
-	// Show the compact string below the QR for manual entry
-	compact := data.Share.CompactEncode()
-	p.SetFont(fontMono, "", smallMono)
-	p.SetFillColor(245, 245, 245)
-	p.CellFormat(0, 4, compact, "", 1, "C", true, 0, "")
-	p.Ln(8)
-
-	// Word grids (recovery words in two columns)
-	nativeWords, _ := data.Share.WordsForLang(core.Lang(lang))
-	if len(nativeWords) > 0 {
-		if lang != "en" {
-			// Non-English: show native language grid first, then English
-			langName := t("lang_" + lang)
-			renderWordGridPDF(p, nativeWords, t("recovery_words_title_lang", len(nativeWords), langName), leftMargin, contentWidth)
-			p.SetFont(fontSans, "I", bodySize)
-			p.MultiCell(0, 5, t("recovery_words_hint"), "", "L", false)
-			p.Ln(5)
-
-			// English fallback grid
-			englishWords, _ := data.Share.Words()
-			renderWordGridPDF(p, englishWords, t("recovery_words_title_english", len(englishWords)), leftMargin, contentWidth)
-			p.SetFont(fontSans, "I", bodySize)
-			p.MultiCell(0, 5, t("recovery_words_dual_hint"), "", "L", false)
-			p.Ln(5)
-		} else {
-			// English only: single grid
-			renderWordGridPDF(p, nativeWords, t("recovery_words_title", len(nativeWords)), leftMargin, contentWidth)
-			p.SetFont(fontSans, "I", bodySize)
-			p.MultiCell(0, 5, t("recovery_words_hint"), "", "L", false)
-			p.Ln(5)
-		}
+	addSub := func(text string) {
+		// Strip leading "- " prefix that translation strings include for plain-text
+		// contexts; the PDF renders its own bullet symbol.
+		text = strings.TrimPrefix(text, "- ")
+		p.SetFont(fontSans, "", bodySize)
+		p.SetX(leftMargin + badgeIndent)
+		p.MultiCell(contentWidth-badgeIndent, 5, "\u2022  "+text, "", "L", false)
 	}
 
-	// PEM block (machine-readable format)
-	// Ensure PEM block starts on a page with enough room for the header + content
-	shareText := data.Share.Encode()
-	shareLines := strings.Split(shareText, "\n")
-	pemHeight := 10.0 // section header
-	for _, line := range shareLines {
-		if line != "" {
-			pemHeight += 3.5
-		} else {
-			pemHeight += 1.5
-		}
-	}
-	{
-		_, pageHeight := p.GetPageSize()
-		_, _, _, bottomMargin := p.GetMargins()
-		usableBottom := pageHeight - bottomMargin
-		if p.GetY()+pemHeight > usableBottom {
-			p.AddPage()
-		}
-	}
-	addSection(p, t("machine_readable"))
-	p.SetFont(fontMono, "", smallMono)
-	p.SetFillColor(245, 245, 245)
+	// Step 1: open recover.html
+	addStep(t("recover_step1"))
+	addSub(t("recover_step1_browsers"))
+	addSub(t("recover_no_html"))
+	p.Ln(3)
 
-	for _, line := range shareLines {
-		if line != "" {
-			p.CellFormat(0, 3.5, line, "", 1, "L", true, 0, "")
-		} else {
-			p.Ln(1.5)
-		}
-	}
-	p.Ln(5)
-
-	// Section: Browser recovery
-	addSection(p, t("recover_browser"))
-	addBody(p, t("recover_step1"))
-	p.Ln(2)
-	p.SetFont(fontSans, "B", bodySize)
-	p.MultiCell(0, 5, "   "+t("recover_share_loaded"), "", "L", false)
-	p.SetFont(fontSans, "", bodySize)
-	p.MultiCell(0, 5, "   "+t("recover_no_html"), "", "L", false)
-	p.Ln(2)
+	// Step 2: load manifest (or note it's embedded)
 	if data.ManifestEmbedded {
-		addBody(p, t("recover_step2_embedded"))
-		addBody(p, "   "+t("recover_step2_embedded_hint"))
+		addStep(t("recover_step2_embedded"))
+		addSub(t("recover_step2_embedded_hint"))
 	} else {
-		addBody(p, t("recover_step2"))
-		addBody(p, "   "+t("recover_step2_drag"))
-		addBody(p, "   "+t("recover_step2_click"))
+		addStep(t("recover_step2_manifest"))
 	}
-	p.Ln(2)
+	p.Ln(3)
+
+	// Steps 3–final
 	if data.Anonymous {
-		addBody(p, t("recover_anon_step3"))
-		addBody(p, "   "+t("recover_anon_step3_drag"))
-		addBody(p, "   "+t("recover_anon_step3_paste"))
-		p.Ln(2)
-		addBody(p, t("recover_anon_step4_auto", data.Threshold))
-		p.Ln(2)
-		addBody(p, t("recover_anon_step5"))
+		addStep(t("recover_anon_step3"))
+		addSub(t("recover_anon_step3_how1"))
+		addSub(t("recover_anon_step3_how2"))
+		addSub(t("recover_anon_step3_how3"))
+		p.Ln(3)
+		addStep(t("recover_anon_step4_auto", data.Threshold))
+		p.Ln(3)
+		addStep(t("recover_anon_step5"))
 	} else {
-		addBody(p, t("recover_step3_contact"))
-		addBody(p, "   "+t("recover_step3_ask"))
-		p.Ln(2)
-		addBody(p, t("recover_step4"))
-		addBody(p, "   "+t("recover_step4_drag"))
-		addBody(p, "   "+t("recover_step4_paste"))
-		p.Ln(2)
-		addBody(p, t("recover_step5_checkmarks"))
-		addBody(p, "   "+t("recover_step5_auto", data.Threshold))
-		p.Ln(2)
-		addBody(p, t("recover_step6"))
+		addStep(t("recover_step3_contact"))
+		addSub(t("recover_step3_how1"))
+		addSub(t("recover_step3_how2"))
+		addSub(t("recover_step3_how3"))
+		p.Ln(3)
+		addStep(t("recover_step4_checkmarks"))
+		addSub(t("recover_step5_auto", data.Threshold))
+		p.Ln(3)
+		addStep(t("recover_step6"))
 	}
-	p.Ln(2)
+	p.Ln(5)
 	p.SetFont(fontSans, "I", bodySize)
 	if data.TlockEnabled {
 		p.MultiCell(0, 5, t("recover_offline_tlock"), "", "L", false)
 	} else {
 		p.MultiCell(0, 5, t("recover_offline"), "", "L", false)
 	}
-	p.Ln(5)
 
-	// Section: CLI fallback — keep header with content
-	{
-		// header (10) + hint text (~10) + URL (~5) + spacing (2) + usage (~10) + trailing (5) ≈ 42
-		cliBlockHeight := 42.0
-		_, pageHeight := p.GetPageSize()
-		_, _, _, bottomMargin := p.GetMargins()
-		usableBottom := pageHeight - bottomMargin
-		if p.GetY()+cliBlockHeight > usableBottom {
-			p.AddPage()
-		}
-	}
-	addSection(p, t("recover_cli"))
-	addBody(p, t("recover_cli_hint"))
-	p.SetFont(fontMono, "", monoSize)
-	p.MultiCell(0, 5, data.GitHubReleaseURL, "", "L", false)
+	// ══════════════════════════════════════════════════════════════════════════
+	// PAGE 3: Your Piece — recovery words
+	// ══════════════════════════════════════════════════════════════════════════
+	p.AddPage()
+	addColorSection(p, t("your_share"), bc)
 	p.Ln(2)
-	addBody(p, t("recover_cli_usage"))
-	p.Ln(5)
 
-	// Footer: Metadata — keep header with all metadata lines
-	{
-		// header (5) + 7 metadata lines × 4mm = 33
-		metaBlockHeight := 33.0
-		_, pageHeight := p.GetPageSize()
-		_, _, _, bottomMargin := p.GetMargins()
-		usableBottom := pageHeight - bottomMargin
-		if p.GetY()+metaBlockHeight > usableBottom {
-			p.AddPage()
+	nativeWords, _ := data.Share.WordsForLang(core.Lang(lang))
+	if len(nativeWords) > 0 {
+		if lang != "en" {
+			langName := t("lang_" + lang)
+			renderWordGridPDF(p, nativeWords, t("recovery_words_title_lang", len(nativeWords), langName), leftMargin, contentWidth, bc)
+			p.SetFont(fontSans, "I", bodySize)
+			p.MultiCell(0, 5, t("recovery_words_hint"), "", "L", false)
+			p.Ln(5)
+
+			englishWords, _ := data.Share.Words()
+			renderWordGridPDF(p, englishWords, t("recovery_words_title_english", len(englishWords)), leftMargin, contentWidth, bc)
+			p.SetFont(fontSans, "I", bodySize)
+			p.MultiCell(0, 5, t("recovery_words_dual_hint"), "", "L", false)
+			p.Ln(5)
+		} else {
+			renderWordGridPDF(p, nativeWords, t("recovery_words_title", len(nativeWords)), leftMargin, contentWidth, bc)
+			p.SetFont(fontSans, "I", bodySize)
+			p.MultiCell(0, 5, t("recovery_words_hint"), "", "L", false)
+			p.Ln(5)
 		}
 	}
+
+	// ══════════════════════════════════════════════════════════════════════════
+	// PAGE 4: Text Format — machine-readable PEM block
+	// ══════════════════════════════════════════════════════════════════════════
+	// PEM block — render each line on a single row so copy-paste works cleanly.
+	// Auto-shrink font if a line (e.g. Checksum) is wider than the content area.
+	// Empty lines use a space cell (not Ln) so copy-paste preserves them.
+	p.AddPage()
+	addColorSection(p, t("machine_readable"), bc)
+	p.SetFont(fontSans, "I", bodySize-1)
+	p.SetTextColor(120, 115, 110)
+	p.MultiCell(0, 4.5, t("machine_readable_hint"), "", "L", false)
+	p.SetTextColor(46, 42, 38)
+	p.Ln(4)
+	p.SetFillColor(248, 248, 248)
+	pemLines := strings.Split(strings.TrimRight(shareText, "\n"), "\n")
+	for _, line := range pemLines {
+		if line != "" {
+			fs := smallMono
+			p.SetFont(fontMono, "", fs)
+			for p.GetStringWidth(line) > contentWidth-2 && fs > 4 {
+				fs -= 0.5
+				p.SetFont(fontMono, "", fs)
+			}
+			p.CellFormat(contentWidth, 3.5, line, "", 1, "L", true, 0, "")
+		} else {
+			// Render a space cell so the empty line appears in copy-paste output
+			p.SetFont(fontMono, "", smallMono)
+			p.CellFormat(contentWidth, 3.5, " ", "", 1, "L", true, 0, "")
+		}
+	}
+
+	// ══════════════════════════════════════════════════════════════════════════
+	// PAGE 5: CLI Fallback + Metadata
+	// ══════════════════════════════════════════════════════════════════════════
+	p.AddPage()
+	addColorSection(p, t("recover_cli"), bc)
+	p.Ln(3)
+	addBody(p, t("recover_cli_hint"))
+	p.Ln(6)
+
+	// Helper section — clear structure for the tech-savvy person
+	addColorSection(p, t("recover_cli_helper_title"), bc)
+	p.Ln(1)
+	addBody(p, t("recover_cli_download"))
+	p.Ln(2)
+	p.SetFont(fontMono, "", monoSize)
+	p.SetFillColor(248, 248, 248)
+	p.MultiCell(0, 5, "  "+data.GitHubReleaseURL, "", "L", true)
+	p.Ln(4)
+	addBody(p, t("recover_cli_run"))
+	p.Ln(2)
+	// Prominent command box with bundle-colored border
+	p.SetFont(fontMono, "B", monoSize+1)
+	p.SetFillColor(248, 248, 248)
+	p.SetDrawColor(bc[0], bc[1], bc[2])
+	p.SetLineWidth(1.0)
+	p.MultiCell(0, 7, "  "+t("recover_cli_usage"), "1", "L", true)
+	p.SetLineWidth(0.2)
+	p.SetDrawColor(200, 200, 200)
+	p.Ln(4)
+	p.SetFont(fontSans, "I", bodySize-1)
+	p.SetTextColor(100, 100, 100)
+	p.MultiCell(0, 4.5, t("recover_cli_no_install"), "", "L", false)
+	p.SetTextColor(46, 42, 38)
+	p.Ln(10)
+
+	// Metadata block
 	p.SetFont(fontSans, "B", smallMono)
 	p.CellFormat(0, 5, "METADATA", "", 1, "L", false, 0, "")
 	p.SetFont(fontMono, "", smallMono)
-	p.SetFillColor(245, 245, 245)
+	p.SetFillColor(248, 248, 248)
 	addMeta(p, "rememory-version", data.Version)
 	addMeta(p, "created", data.Created.Format(time.RFC3339))
 	addMeta(p, "project", data.ProjectName)
@@ -411,15 +353,14 @@ func GenerateReadme(data ReadmeData) ([]byte, error) {
 		return nil, fmt.Errorf("writing PDF: %w", err)
 	}
 
-	// Append the machine-readable share to the end of the PDF
-	// This allows the PDF to be dragged into the recovery UI as a share
+	// Append the machine-readable share so recover.html can accept this PDF as input.
 	buf.WriteString(shareText)
 
 	return buf.Bytes(), nil
 }
 
 // renderWordGridPDF renders a two-column word grid with page-break detection.
-func renderWordGridPDF(p *fpdf.Fpdf, words []string, title string, leftMargin, contentWidth float64) {
+func renderWordGridPDF(p *fpdf.Fpdf, words []string, title string, leftMargin, contentWidth float64, bc [3]int) {
 	half := (len(words) + 1) / 2
 	rowHeight := 5.5
 	gridHeight := 10 + float64(half)*rowHeight + 2
@@ -431,7 +372,7 @@ func renderWordGridPDF(p *fpdf.Fpdf, words []string, title string, leftMargin, c
 		p.AddPage()
 	}
 
-	addSection(p, title)
+	addColorSection(p, title, bc)
 	p.SetFont(fontMono, "", bodySize)
 
 	colWidth := contentWidth / 2
@@ -454,11 +395,99 @@ func renderWordGridPDF(p *fpdf.Fpdf, words []string, title string, leftMargin, c
 	p.SetY(startY + float64(half)*rowHeight + 2)
 }
 
-func addSection(pdf *fpdf.Fpdf, title string) {
-	pdf.SetFont(fontSans, "B", headingSize)
-	pdf.SetFillColor(230, 230, 230)
-	pdf.CellFormat(0, 8, " "+title, "", 1, "L", true, 0, "")
-	pdf.Ln(2)
+// tintColor returns a light tinted version of bc for use as a background fill.
+// Blends 80% toward white — light enough to be non-distracting, visible enough to show structure.
+func tintColor(bc [3]int) (int, int, int) {
+	blend := func(c int) int { return c + (255-c)*4/5 }
+	return blend(bc[0]), blend(bc[1]), blend(bc[2])
+}
+
+// addColorSection renders a section header bar in the bundle's identity color with white text.
+// Uses MultiCell so long titles (e.g. German) wrap to a second line instead of clipping.
+func addColorSection(p *fpdf.Fpdf, title string, bc [3]int) {
+	pw, _ := p.GetPageSize()
+	lm, _, rm, _ := p.GetMargins()
+	cw := pw - lm - rm
+	// Ensure we start at the left margin — the header func may leave cursor elsewhere.
+	p.SetX(lm)
+	p.SetFont(fontSans, "B", headingSize)
+	p.SetFillColor(bc[0], bc[1], bc[2])
+	p.SetTextColor(255, 255, 255)
+	p.MultiCell(cw, 9, "  "+title, "", "L", true)
+	p.SetTextColor(46, 42, 38)
+	p.Ln(2)
+}
+
+// addThresholdBox renders the prominent "X of Y required" rule box.
+func addThresholdBox(p *fpdf.Fpdf, label, count string, leftMargin, contentWidth float64, bc [3]int) {
+	y := p.GetY()
+	boxH := 30.0
+
+	// Tinted fill with saturated border
+	p.SetFillColor(tintColor(bc))
+	p.SetDrawColor(bc[0], bc[1], bc[2])
+	p.SetLineWidth(1.5)
+	p.Rect(leftMargin, y, contentWidth, boxH, "FD")
+	p.SetLineWidth(0.2)
+	p.SetDrawColor(200, 200, 200)
+
+	// Label (small, grey)
+	p.SetFont(fontSans, "", 9)
+	p.SetTextColor(100, 100, 100)
+	p.SetXY(leftMargin, y+4)
+	p.CellFormat(contentWidth, 5, label, "", 1, "C", false, 0, "")
+
+	// Count (large, in bundle color)
+	p.SetFont(fontSans, "B", 26)
+	p.SetTextColor(bc[0], bc[1], bc[2])
+	p.SetXY(leftMargin, y+10)
+	p.CellFormat(contentWidth, 16, count, "", 1, "C", false, 0, "")
+
+	p.SetTextColor(46, 42, 38)
+	p.SetY(y + boxH)
+}
+
+// addStepRow renders a numbered step with a colored badge on the left.
+// Uses MultiCell for the text so long translations (e.g. German) wrap
+// instead of overflowing the right margin.
+func addStepRow(p *fpdf.Fpdf, num int, text string, leftMargin, contentWidth float64, bc [3]int) {
+	badgeW := 9.0
+	lineH := 5.5
+	minH := 8.0
+
+	startY := p.GetY()
+
+	// Render text with MultiCell — wraps automatically, tinted fill
+	tr, tg, tb := tintColor(bc)
+	p.SetFillColor(tr, tg, tb)
+	p.SetTextColor(46, 42, 38)
+	p.SetFont(fontSans, "", bodySize)
+	p.SetXY(leftMargin+badgeW, startY)
+	p.MultiCell(contentWidth-badgeW, lineH, "  "+text, "", "L", true)
+	endY := p.GetY()
+	rowH := endY - startY
+
+	// Enforce minimum height for single-line steps
+	if rowH < minH {
+		p.SetFillColor(tr, tg, tb)
+		p.Rect(leftMargin+badgeW, endY, contentWidth-badgeW, minH-rowH, "F")
+		rowH = minH
+		endY = startY + rowH
+	}
+
+	// Badge: colored rectangle spanning the full row height
+	p.SetFillColor(bc[0], bc[1], bc[2])
+	p.Rect(leftMargin, startY, badgeW, rowH, "F")
+
+	// Number centered vertically in the badge
+	p.SetTextColor(255, 255, 255)
+	p.SetFont(fontSans, "B", 11)
+	p.SetXY(leftMargin, startY+(rowH-6)/2)
+	p.CellFormat(badgeW, 6, fmt.Sprintf("%d", num), "", 0, "C", false, 0, "")
+
+	p.SetTextColor(46, 42, 38)
+	p.SetY(endY)
+	p.Ln(1)
 }
 
 func addBody(pdf *fpdf.Fpdf, text string) {
@@ -466,11 +495,25 @@ func addBody(pdf *fpdf.Fpdf, text string) {
 	pdf.MultiCell(0, 5, text, "", "L", false)
 }
 
-func addMeta(pdf *fpdf.Fpdf, key, value string) {
-	pdf.CellFormat(0, 4, fmt.Sprintf("%s: %s", key, value), "", 1, "L", true, 0, "")
+// addPathBox renders a role-path box with a bold title and body text on a tinted background.
+// Used on page 1 to visually guide readers to the right page.
+func addPathBox(p *fpdf.Fpdf, title, body string, leftMargin, contentWidth float64, bc [3]int) {
+	r, g, b := tintColor(bc)
+	p.SetFillColor(r, g, b)
+
+	// Title in bundle color
+	p.SetX(leftMargin)
+	p.SetFont(fontSans, "B", bodySize+1)
+	p.SetTextColor(bc[0], bc[1], bc[2])
+	p.CellFormat(contentWidth, 7, "  "+title, "", 1, "L", true, 0, "")
+
+	// Body text
+	p.SetX(leftMargin)
+	p.SetFont(fontSans, "", bodySize)
+	p.SetTextColor(46, 42, 38)
+	p.MultiCell(contentWidth, 5, "  "+body, "", "L", true)
 }
 
-// generateQRPNG creates a QR code PNG image for the given content string.
-func generateQRPNG(content string) ([]byte, error) {
-	return qrcode.Encode(content, qrcode.Medium, 512)
+func addMeta(pdf *fpdf.Fpdf, key, value string) {
+	pdf.CellFormat(0, 4, fmt.Sprintf("%s: %s", key, value), "", 1, "L", true, 0, "")
 }

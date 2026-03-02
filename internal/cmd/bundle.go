@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/eljojo/rememory/internal/bundle"
-	"github.com/eljojo/rememory/internal/core"
 	"github.com/eljojo/rememory/internal/project"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +29,6 @@ Each bundle contains:
 }
 
 func init() {
-	bundleCmd.Flags().String("recovery-url", core.DefaultRecoveryURL, "Base URL for QR code in PDF")
 	bundleCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 10 MB or less)")
 	bundleCmd.Flags().Bool("pages", false, "Generate a static pages directory (recover.html + MANIFEST.age) for hosting")
 	rootCmd.AddCommand(bundleCmd)
@@ -62,12 +60,10 @@ func runBundle(cmd *cobra.Command, args []string) error {
 	// Generate bundles
 	fmt.Printf("Generating bundles for %d friends...\n\n", len(p.Friends))
 
-	recoveryURL, _ := cmd.Flags().GetString("recovery-url")
 	noEmbedManifest, _ := cmd.Flags().GetBool("no-embed-manifest")
 
 	cfg := bundle.Config{
 		Version:         version,
-		RecoveryURL:     recoveryURL,
 		NoEmbedManifest: noEmbedManifest,
 		TlockEnabled:    p.Sealed.TlockEnabled,
 	}

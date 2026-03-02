@@ -65,21 +65,18 @@ func GenerateReadme(data ReadmeData) string {
 	sb.WriteString(fmt.Sprintf("                              %s\n", t("for", data.Holder)))
 	sb.WriteString("================================================================================\n\n")
 
-	// What is this
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n", t("what_is_this")))
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n", t("what_bundle_for", data.ProjectName)))
-	sb.WriteString(fmt.Sprintf("%s\n", t("what_one_of", data.Total)))
-	sb.WriteString(fmt.Sprintf("%s\n\n", t("what_threshold", data.Threshold)))
+	// Recovery rule (threshold box equivalent)
+	sb.WriteString(fmt.Sprintf("   %s: %s\n\n", t("recovery_rule"), t("recovery_rule_count", data.Threshold, data.Total)))
 
-	// Warning
-	sb.WriteString(fmt.Sprintf("!!  %s\n", t("warning_title")))
-	if data.Anonymous {
-		sb.WriteString(fmt.Sprintf("    %s\n\n", t("warning_message_shares")))
-	} else {
-		sb.WriteString(fmt.Sprintf("    %s\n\n", t("warning_message_friends")))
-	}
+	// Visual role paths — "Why are you reading this?"
+	sb.WriteString("--------------------------------------------------------------------------------\n")
+	sb.WriteString(fmt.Sprintf("%s\n", t("path1_title")))
+	sb.WriteString(fmt.Sprintf("   %s\n\n", t("path1_body", data.ProjectName)))
+	sb.WriteString(fmt.Sprintf("%s\n", t("path2_title")))
+	sb.WriteString(fmt.Sprintf("   %s\n\n", t("path2_body")))
+	sb.WriteString(fmt.Sprintf("%s\n", t("path3_title")))
+	sb.WriteString(fmt.Sprintf("   %s\n", t("path3_body")))
+	sb.WriteString("--------------------------------------------------------------------------------\n\n")
 
 	// Other share holders (skip for anonymous mode)
 	if !data.Anonymous {
@@ -95,46 +92,35 @@ func GenerateReadme(data ReadmeData) string {
 		}
 	}
 
-	// Sharing your share (what to do when someone asks)
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n", t("sharing_title")))
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", t("sharing_verify")))
-	sb.WriteString(fmt.Sprintf("  - %s\n", t("sharing_easiest")))
-	sb.WriteString(fmt.Sprintf("  - %s\n", t("sharing_readme_only")))
-	sb.WriteString(fmt.Sprintf("  - %s\n", t("sharing_words_phone")))
-	sb.WriteString(fmt.Sprintf("  - %s\n\n", t("sharing_qr_mail")))
-
-	// Primary method - Browser
+	// ── PAGE 2 equivalent: How to recover ──
 	sb.WriteString("--------------------------------------------------------------------------------\n")
 	sb.WriteString(fmt.Sprintf("%s\n", t("recover_browser")))
 	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_step1")))
+	sb.WriteString(fmt.Sprintf("1. %s\n", t("recover_step1")))
+	sb.WriteString(fmt.Sprintf("   %s\n", t("recover_step1_browsers")))
 	sb.WriteString(fmt.Sprintf("   %s\n", t("recover_share_loaded")))
 	sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_no_html")))
 	if data.ManifestEmbedded {
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_step2_embedded")))
+		sb.WriteString(fmt.Sprintf("2. %s\n", t("recover_step2_embedded")))
 		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step2_embedded_hint")))
 	} else {
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_step2")))
-		sb.WriteString(fmt.Sprintf("   %s\n", t("recover_step2_drag")))
-		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step2_click")))
+		sb.WriteString(fmt.Sprintf("2. %s\n\n", t("recover_step2_manifest")))
 	}
 	if data.Anonymous {
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_anon_step3")))
-		sb.WriteString(fmt.Sprintf("   %s\n", t("recover_anon_step3_drag")))
-		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_anon_step3_paste")))
-		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_anon_step4_auto", data.Threshold)))
-		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_anon_step5")))
+		sb.WriteString(fmt.Sprintf("3. %s\n", t("recover_anon_step3")))
+		sb.WriteString(fmt.Sprintf("   - %s\n", t("recover_anon_step3_how1")))
+		sb.WriteString(fmt.Sprintf("   - %s\n", t("recover_anon_step3_how2")))
+		sb.WriteString(fmt.Sprintf("   - %s\n\n", t("recover_anon_step3_how3")))
+		sb.WriteString(fmt.Sprintf("4. %s\n\n", t("recover_anon_step4_auto", data.Threshold)))
+		sb.WriteString(fmt.Sprintf("5. %s\n\n", t("recover_anon_step5")))
 	} else {
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_step3_contact")))
-		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step3_ask")))
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_step4")))
-		sb.WriteString(fmt.Sprintf("   %s\n", t("recover_step4_drag")))
-		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step4_paste")))
-		sb.WriteString(fmt.Sprintf("%s\n", t("recover_step5_checkmarks")))
+		sb.WriteString(fmt.Sprintf("3. %s\n", t("recover_step3_contact")))
+		sb.WriteString(fmt.Sprintf("   - %s\n", t("recover_step3_how1")))
+		sb.WriteString(fmt.Sprintf("   - %s\n", t("recover_step3_how2")))
+		sb.WriteString(fmt.Sprintf("   - %s\n\n", t("recover_step3_how3")))
+		sb.WriteString(fmt.Sprintf("   %s\n", t("recover_step4_checkmarks")))
 		sb.WriteString(fmt.Sprintf("   %s\n\n", t("recover_step5_auto", data.Threshold)))
-		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_step6")))
+		sb.WriteString(fmt.Sprintf("4. %s\n\n", t("recover_step6")))
 	}
 	if data.TlockEnabled {
 		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_offline_tlock")))
@@ -142,15 +128,7 @@ func GenerateReadme(data ReadmeData) string {
 		sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_offline")))
 	}
 
-	// Fallback method - CLI
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n", t("recover_cli")))
-	sb.WriteString("--------------------------------------------------------------------------------\n")
-	sb.WriteString(fmt.Sprintf("%s\n", t("recover_cli_hint")))
-	sb.WriteString(fmt.Sprintf("%s\n\n", data.GitHubReleaseURL))
-	sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_cli_usage")))
-
-	// Share block
+	// ── PAGE 3 equivalent: Your piece ──
 	sb.WriteString("--------------------------------------------------------------------------------\n")
 	sb.WriteString(fmt.Sprintf("%s\n", t("your_share")))
 	sb.WriteString("--------------------------------------------------------------------------------\n")
@@ -177,6 +155,14 @@ func GenerateReadme(data ReadmeData) string {
 			sb.WriteString(fmt.Sprintf("\n%s\n\n", t("recovery_words_hint")))
 		}
 	}
+
+	// Fallback method - CLI
+	sb.WriteString("--------------------------------------------------------------------------------\n")
+	sb.WriteString(fmt.Sprintf("%s\n", t("recover_cli")))
+	sb.WriteString("--------------------------------------------------------------------------------\n")
+	sb.WriteString(fmt.Sprintf("%s\n", t("recover_cli_for_helper")))
+	sb.WriteString(fmt.Sprintf("%s\n\n", data.GitHubReleaseURL))
+	sb.WriteString(fmt.Sprintf("%s\n\n", t("recover_cli_usage")))
 
 	// PEM block (machine-readable format)
 	sb.WriteString(fmt.Sprintf("%s\n", t("machine_readable")))

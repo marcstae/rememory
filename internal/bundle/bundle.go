@@ -21,7 +21,6 @@ import (
 // Config holds configuration for bundle generation.
 type Config struct {
 	Version         string // Tool version (e.g., "v1.0.0")
-	RecoveryURL     string // Optional: base URL for QR code (e.g. "https://example.com/recover.html")
 	NoEmbedManifest bool   // If true, do not embed MANIFEST.age in recover.html even when small enough
 	TlockEnabled    bool   // If true, bundles include tlock-js for time-lock decryption
 }
@@ -126,7 +125,6 @@ func GenerateAll(p *project.Project, cfg Config) error {
 			GitHubReleaseURL: githubReleaseURL,
 			SealedAt:         p.Sealed.At,
 			Anonymous:        p.Anonymous,
-			RecoveryURL:      cfg.RecoveryURL,
 			Language:         lang,
 			TlockEnabled:     cfg.TlockEnabled,
 		})
@@ -161,7 +159,6 @@ type BundleParams struct {
 	GitHubReleaseURL string
 	SealedAt         time.Time
 	Anonymous        bool
-	RecoveryURL      string
 	Language         string // Bundle language for this friend
 	TlockEnabled     bool   // true when manifest uses time-lock encryption
 }
@@ -204,7 +201,6 @@ func GenerateBundle(params BundleParams) error {
 		RecoverChecksum:  readmeData.RecoverChecksum,
 		Created:          readmeData.Created,
 		Anonymous:        readmeData.Anonymous,
-		RecoveryURL:      params.RecoveryURL,
 		Language:         params.Language,
 		ManifestEmbedded: params.ManifestEmbedded,
 		TlockEnabled:     params.TlockEnabled,

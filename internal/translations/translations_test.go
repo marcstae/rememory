@@ -292,16 +292,23 @@ func TestMakerHasExpectedKeys(t *testing.T) {
 
 func TestReadmeHasExpectedKeys(t *testing.T) {
 	expectedKeys := []string{
-		"title", "for", "warning_title",
-		"warning_message_friends", "warning_message_shares",
-		"what_is_this", "what_bundle_for", "what_one_of", "what_threshold",
+		"title", "for",
+		"path1_title", "path1_body", "path2_title", "path2_body", "path3_title", "path3_body",
 		"other_holders", "contact_label",
-		"recover_browser", "recover_step1", "recover_share_loaded",
-		"recover_step2", "recover_step2_drag", "recover_step2_click",
+		"recover_browser", "recover_step1", "recover_step1_browsers", "recover_share_loaded",
+		"recover_step2_manifest", "recover_step2_embedded", "recover_step2_embedded_hint",
+		"recover_step3_contact", "recover_step3_how1", "recover_step3_how2", "recover_step3_how3",
+		"recover_step4_checkmarks", "recover_step5_auto", "recover_step6",
+		"recover_anon_step3", "recover_anon_step3_how1", "recover_anon_step3_how2", "recover_anon_step3_how3",
+		"recover_anon_step4_auto", "recover_anon_step5",
 		"recover_offline", "recover_cli", "recover_cli_hint", "recover_cli_usage",
+		"recover_cli_for_helper",
+		"recover_cli_helper_title", "recover_cli_download", "recover_cli_run", "recover_cli_no_install",
 		"your_share", "recovery_words_title", "recovery_words_hint",
-		"machine_readable",
+		"machine_readable", "machine_readable_hint",
 		"readme_filename",
+		"recovery_rule", "recovery_rule_count",
+		"recover_no_html",
 	}
 
 	keys, err := GetComponentKeys("readme")

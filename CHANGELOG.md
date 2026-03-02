@@ -4,6 +4,13 @@ All notable changes to ReMemory are documented here.
 
 ## Unreleased
 
+## v0.0.17 — 2026-03-02
+
+- **Guided recovery** — The recovery tool now walks people through each step, one screen at a time: welcome, contact list, adding pieces, and recovery. Less overwhelming for someone who has never seen this before.
+- **Redesigned PDF** — The printed instructions are clearer and more approachable. Page one now starts with three paths ("Why are you reading this?") so people can orient themselves immediately. Recovery steps, word lists, and the text-format block each get their own page with room to breathe.
+- **More forgiving copy-paste** — Pasting a piece from a PDF into the recovery tool now works even if the formatting is imperfect — missing blank lines, extra whitespace, or other quirks from PDF copy-paste are handled gracefully.
+- **QR codes removed** — QR codes added complexity without enough benefit. The recovery flow now focuses on three clearer methods: drag a file, type words, or paste text. Fewer moving parts, fewer things to break in ten years.
+- **Redesigned README** — The plain-text README in each bundle has been rewritten around three scenarios: you just received this, someone needs help recovering, or you need to recover files yourself. Each path tells you exactly what to do.
 - **Update nudge** — The CLI and web maker now gently let you know if you're running a version built more than six months ago, with a link to check for updates. No network calls — it just compares the build date to your clock.
 - **Mismatched piece detection** — Adding a piece from a different set now shows a clear error right away, instead of failing later with a generic decryption message.
 

@@ -120,6 +120,8 @@ Each friend gets a ZIP bundle containing:
 
 ![Example README PDF — page 2](docs/screenshots/demo-pdf/page-2.png)
 ![Example README PDF — page 3](docs/screenshots/demo-pdf/page-3.png)
+![Example README PDF — page 4](docs/screenshots/demo-pdf/page-4.png)
+![Example README PDF — page 5](docs/screenshots/demo-pdf/page-5.png)
 
 </details>
 

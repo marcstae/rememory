@@ -34,7 +34,9 @@ export async function parseShare(content: string): Promise<ParsedShare> {
 
   const pemContent = content.slice(beginIdx + PEM_BEGIN.length, endIdx).trim();
 
-  // Parse headers and data
+  // Parse headers and data.
+  // Tolerant: a missing blank line between headers and base64 data is fine.
+  // Any line that doesn't look like "Key: Value" is treated as data.
   const lines = pemContent.split('\n');
   const headers: Record<string, string> = {};
   let dataLines: string[] = [];
@@ -43,16 +45,22 @@ export async function parseShare(content: string): Promise<ParsedShare> {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
-      inData = true;
+      // Empty lines signal the start of data, but extra blanks are harmless
+      if (Object.keys(headers).length > 0) inData = true;
       continue;
     }
 
     if (!inData) {
       const colonIdx = trimmed.indexOf(':');
-      if (colonIdx > 0) {
+      if (colonIdx > 0 && /^[A-Za-z][A-Za-z0-9_-]*$/.test(trimmed.slice(0, colonIdx).trim())) {
         const key = trimmed.slice(0, colonIdx).trim();
         const value = trimmed.slice(colonIdx + 1).trim();
         headers[key] = value;
+      } else {
+        // Line doesn't look like a header — must be base64 data
+        // (handles cases where the empty separator line is missing, e.g. PDF copy-paste)
+        inData = true;
+        dataLines.push(trimmed);
       }
     } else {
       dataLines.push(trimmed);

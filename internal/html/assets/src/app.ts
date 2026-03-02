@@ -1,12 +1,8 @@
-// ReMemory Recovery Tool - Browser-based recovery using native JavaScript crypto
+// ReMemory Recovery Tool - Wizard-based recovery using native JavaScript crypto
 //
 // Built with esbuild --define:__TLOCK__=true|false to produce two variants:
 //   app.js       (__TLOCK__=false) — offline recovery, no tlock/drand code
 //   app-tlock.js (__TLOCK__=true)  — recovery with tlock (HTTP to drand)
-
-// BarcodeDetector polyfill - provides QR scanning in browsers without native support
-import { registerPolyfill } from './barcode-detector';
-registerPolyfill();
 
 import type {
   RecoveryState,
@@ -62,15 +58,17 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       meta: import('./types').TlockContainerMeta,
       ciphertext: Uint8Array,
       onTick: (unlockDate: Date) => void,
-      onReady: (archive: Uint8Array) => void,
-      onError: (err: Error) => void,
+      onDecrypted: (archive: Uint8Array) => void,
+      onError: (err: unknown) => void,
     ): void;
     stopWaiting(): void;
     formatUnlockDate(date: Date, t: TranslationFunction): { text: string; relative: boolean };
-    formatTimelockDate(date: Date): string;
   } | null = __TLOCK__ ? require('./tlock-recover') : null;
 
-  // Wrap email addresses in mailto: links. Input must already be HTML-escaped.
+  // ============================================
+  // Utilities
+  // ============================================
+
   const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
   function linkifyEmail(escaped: string): string {
     return escaped.replace(EMAIL_RE, (match) => {
@@ -79,7 +77,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     });
   }
 
-  // State
+  // ============================================
+  // Recovery State
+  // ============================================
+
   const state: RecoveryState = {
     shares: [],
     manifest: null,
@@ -92,78 +93,115 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   // Tlock container bytes (saved after age-decrypt for failsafe download if tlock fails)
   let tlockContainerData: Uint8Array | null = null;
 
-  // DOM elements interface
-  interface Elements {
-    shareDropZone: HTMLElement | null;
-    shareFileInput: HTMLInputElement | null;
-    sharesList: HTMLElement | null;
-    thresholdInfo: HTMLElement | null;
-    manifestDropZone: HTMLElement | null;
-    manifestFileInput: HTMLInputElement | null;
+  // ============================================
+  // Wizard State
+  // ============================================
+
+  type WizardScreen = 'welcome' | 'contacts' | 'add-piece' | 'words' | 'recovery';
+  let wizardScreen: WizardScreen = 'welcome';
+  let wizardFriendName: string | null = null;
+
+  // ============================================
+  // DOM Elements
+  // ============================================
+
+  interface WizElements {
+    // Welcome
+    welcomeScreen: HTMLElement | null;
+    welcomeInfo: HTMLElement | null;
+    beginBtn: HTMLButtonElement | null;
+    // Contacts
+    contactsScreen: HTMLElement | null;
+    progressFill: HTMLElement | null;
+    progressText: HTMLElement | null;
+    contactList: HTMLElement | null;
+    addPieceBtn: HTMLButtonElement | null;
+    // Add Piece
+    addPieceScreen: HTMLElement | null;
+    backContactsBtn: HTMLButtonElement | null;
+    addTitle: HTMLElement | null;
+    methods: HTMLElement | null;
+    methodFileBtn: HTMLButtonElement | null;
+    methodWordsBtn: HTMLButtonElement | null;
+    methodPasteBtn: HTMLButtonElement | null;
+    fileArea: HTMLElement | null;
+    fileDrop: HTMLElement | null;
+    fileInput: HTMLInputElement | null;
+    pasteArea: HTMLElement | null;
+    pasteInput: HTMLTextAreaElement | null;
+    pasteSubmitBtn: HTMLButtonElement | null;
+    // Words
+    wordsScreen: HTMLElement | null;
+    backMethodsBtn: HTMLButtonElement | null;
+    wordGrid: HTMLElement | null;
+    wordsError: HTMLElement | null;
+    wordsSubmitBtn: HTMLButtonElement | null;
+    // Recovery
+    recoveryScreen: HTMLElement | null;
+    recoveryTitle: HTMLElement | null;
+    manifestArea: HTMLElement | null;
+    manifestDrop: HTMLElement | null;
+    manifestInput: HTMLInputElement | null;
     manifestStatus: HTMLElement | null;
-    recoverBtn: HTMLButtonElement | null;
-    recoverSection: HTMLElement | null;
     progressBar: HTMLElement | null;
     statusMessage: HTMLElement | null;
     filesList: HTMLElement | null;
     downloadActions: HTMLElement | null;
     downloadAllBtn: HTMLButtonElement | null;
-    pasteToggleBtn: HTMLButtonElement | null;
-    pasteArea: HTMLElement | null;
-    pasteInput: HTMLTextAreaElement | null;
-    pasteSubmitBtn: HTMLButtonElement | null;
-    contactListSection: HTMLElement | null;
-    contactList: HTMLElement | null;
-    step1Card: HTMLElement | null;
-    step2Card: HTMLElement | null;
-    scanQrBtn: HTMLButtonElement | null;
-    qrScannerModal: HTMLElement | null;
-    qrVideo: HTMLVideoElement | null;
-    qrScannerClose: HTMLButtonElement | null;
     tlockWaiting: HTMLElement | null;
     tlockWaitingDate: HTMLElement | null;
   }
 
-  // DOM elements
-  const elements: Elements = {
-    shareDropZone: document.getElementById('share-drop-zone'),
-    shareFileInput: document.getElementById('share-file-input') as HTMLInputElement | null,
-    sharesList: document.getElementById('shares-list'),
-    thresholdInfo: document.getElementById('threshold-info'),
-    manifestDropZone: document.getElementById('manifest-drop-zone'),
-    manifestFileInput: document.getElementById('manifest-file-input') as HTMLInputElement | null,
-    manifestStatus: document.getElementById('manifest-status'),
-    recoverBtn: document.getElementById('recover-btn') as HTMLButtonElement | null,
-    recoverSection: document.getElementById('recover-section'),
+  const el: WizElements = {
+    welcomeScreen: document.getElementById('wiz-welcome'),
+    welcomeInfo: document.getElementById('wiz-welcome-info'),
+    beginBtn: document.getElementById('wiz-begin-btn') as HTMLButtonElement | null,
+    contactsScreen: document.getElementById('wiz-contacts'),
+    progressFill: document.getElementById('wiz-progress-fill'),
+    progressText: document.getElementById('wiz-progress-text'),
+    contactList: document.getElementById('wiz-contact-list'),
+    addPieceBtn: document.getElementById('wiz-add-piece-btn') as HTMLButtonElement | null,
+    addPieceScreen: document.getElementById('wiz-add-piece'),
+    backContactsBtn: document.getElementById('wiz-back-contacts-btn') as HTMLButtonElement | null,
+    addTitle: document.getElementById('wiz-add-title'),
+    methods: document.getElementById('wiz-methods'),
+    methodFileBtn: document.getElementById('wiz-method-file-btn') as HTMLButtonElement | null,
+    methodWordsBtn: document.getElementById('wiz-method-words-btn') as HTMLButtonElement | null,
+    methodPasteBtn: document.getElementById('wiz-method-paste-btn') as HTMLButtonElement | null,
+    fileArea: document.getElementById('wiz-file-area'),
+    fileDrop: document.getElementById('wiz-file-drop'),
+    fileInput: document.getElementById('wiz-file-input') as HTMLInputElement | null,
+    pasteArea: document.getElementById('wiz-paste-area'),
+    pasteInput: document.getElementById('wiz-paste-input') as HTMLTextAreaElement | null,
+    pasteSubmitBtn: document.getElementById('wiz-paste-submit-btn') as HTMLButtonElement | null,
+    wordsScreen: document.getElementById('wiz-words'),
+    backMethodsBtn: document.getElementById('wiz-back-methods-btn') as HTMLButtonElement | null,
+    wordGrid: document.getElementById('wiz-word-grid'),
+    wordsError: document.getElementById('wiz-words-error'),
+    wordsSubmitBtn: document.getElementById('wiz-words-submit-btn') as HTMLButtonElement | null,
+    recoveryScreen: document.getElementById('wiz-recovery'),
+    recoveryTitle: document.getElementById('wiz-recovery-title'),
+    manifestArea: document.getElementById('wiz-manifest-area'),
+    manifestDrop: document.getElementById('wiz-manifest-drop'),
+    manifestInput: document.getElementById('wiz-manifest-input') as HTMLInputElement | null,
+    manifestStatus: document.getElementById('wiz-manifest-status'),
     progressBar: document.getElementById('progress-bar'),
     statusMessage: document.getElementById('status-message'),
     filesList: document.getElementById('files-list'),
     downloadActions: document.getElementById('download-actions'),
     downloadAllBtn: document.getElementById('download-all-btn') as HTMLButtonElement | null,
-    pasteToggleBtn: document.getElementById('paste-toggle-btn') as HTMLButtonElement | null,
-    pasteArea: document.getElementById('paste-area'),
-    pasteInput: document.getElementById('paste-input') as HTMLTextAreaElement | null,
-    pasteSubmitBtn: document.getElementById('paste-submit-btn') as HTMLButtonElement | null,
-    contactListSection: document.getElementById('contact-list-section'),
-    contactList: document.getElementById('contact-list'),
-    step1Card: null,
-    step2Card: null,
-    scanQrBtn: document.getElementById('scan-qr-btn') as HTMLButtonElement | null,
-    qrScannerModal: document.getElementById('qr-scanner-modal'),
-    qrVideo: document.getElementById('qr-video') as HTMLVideoElement | null,
-    qrScannerClose: document.getElementById('qr-scanner-close') as HTMLButtonElement | null,
     tlockWaiting: document.getElementById('tlock-waiting'),
     tlockWaitingDate: document.getElementById('tlock-waiting-date'),
   };
 
-  // Personalization data (embedded in HTML)
+  // ============================================
+  // Personalization & Regex
+  // ============================================
+
   const personalization: PersonalizationData | null =
     (typeof window.PERSONALIZATION !== 'undefined') ? window.PERSONALIZATION : null;
 
-  // Share regex to extract from README.txt content
   const shareRegex = /-----BEGIN REMEMORY SHARE-----([\s\S]*?)-----END REMEMORY SHARE-----/;
-
-  // Compact share format regex: RM{version}:{index}:{total}:{threshold}:{base64url}:{check}
   const compactShareRegex = /^RM\d+:\d+:\d+:\d+:[A-Za-z0-9_-]+:[0-9a-f]{4}$/;
 
   // ============================================
@@ -187,32 +225,44 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     toast.error(title || t('error_title'), msg, guidance, actions);
   }
 
+  function activeDropZone(): HTMLElement | null {
+    if (wizardScreen === 'add-piece') return el.fileDrop;
+    if (wizardScreen === 'recovery') return el.manifestDrop;
+    return null;
+  }
+
   const errorHandlers = {
     invalidShare(filename: string, _detail?: string): void {
-      if (elements.shareDropZone) {
+      const zone = activeDropZone();
+      if (zone) {
         showError(
           t('error_invalid_share_message', filename),
           {
             title: t('error_invalid_share_title'),
             guidance: t('error_invalid_share_guidance'),
             inline: true,
-            targetElement: elements.shareDropZone
+            targetElement: zone
           }
         );
+      } else {
+        toast.error(t('error_invalid_share_title'), t('error_invalid_share_message', filename), t('error_invalid_share_guidance'));
       }
     },
 
     noShareFound(filename: string): void {
-      if (elements.shareDropZone) {
+      const zone = activeDropZone();
+      if (zone) {
         showError(
           t('error_no_share_message', filename),
           {
             title: t('error_no_share_title'),
             guidance: t('error_no_share_guidance'),
             inline: true,
-            targetElement: elements.shareDropZone
+            targetElement: zone
           }
         );
+      } else {
+        toast.error(t('error_no_share_title'), t('error_no_share_message', filename), t('error_no_share_guidance'));
       }
     },
 
@@ -253,8 +303,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
             label: t('action_try_different_shares'),
             primary: true,
             onClick: () => {
-              // Preserve holder's pre-loaded share on retry. Check both isHolder flag
-              // (primary) and holder name (fallback for edge cases).
               const holderName = personalization?.holder?.toLowerCase() || '';
               const holderShare = state.shares.find((share) => {
                 const shareHolder = share.holder?.toLowerCase();
@@ -263,8 +311,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
               state.shares = holderShare ? [holderShare] : [];
               state.recoveryComplete = false;
-              updateSharesUI();
-              elements.step1Card?.classList.remove('collapsed');
+              navigateTo('contacts');
             }
           }
         ]
@@ -281,26 +328,342 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   };
 
   // ============================================
+  // Wizard Navigation
+  // ============================================
+
+  function navigateTo(screen: WizardScreen): void {
+    // Hide all screens
+    const screens = document.querySelectorAll('.wizard-screen');
+    screens.forEach(s => s.classList.add('hidden'));
+
+    wizardScreen = screen;
+
+    // Show target and run screen-specific setup
+    switch (screen) {
+      case 'welcome':
+        el.welcomeScreen?.classList.remove('hidden');
+        setupWelcome();
+        break;
+      case 'contacts':
+        el.contactsScreen?.classList.remove('hidden');
+        renderContacts();
+        updateProgress();
+        break;
+      case 'add-piece':
+        el.addPieceScreen?.classList.remove('hidden');
+        setupAddPiece();
+        break;
+      case 'words':
+        el.wordsScreen?.classList.remove('hidden');
+        buildWordGrid();
+        break;
+      case 'recovery':
+        el.recoveryScreen?.classList.remove('hidden');
+        setupRecoveryScreen();
+        break;
+    }
+  }
+
+  // ============================================
+  // Wizard: Welcome Screen
+  // ============================================
+
+  function setupWelcome(): void {
+    if (!el.welcomeInfo) return;
+
+    const hasHolder = state.shares.some(s => (s as UIShare).isHolder);
+    const hasPers = !!personalization;
+
+    if (hasPers && hasHolder) {
+      const needed = state.threshold - state.shares.length;
+      let info = `<p class="wiz-checkmark">&#10003; ${t('wiz_your_piece_ready')}</p>`;
+      if (needed > 0) {
+        info += `<p>${needed === 1 ? t('wiz_need_from_friends_one') : t('wiz_need_from_friends', needed)}</p>`;
+      }
+      el.welcomeInfo.innerHTML = info;
+      el.welcomeInfo.classList.remove('hidden');
+    } else if (hasPers) {
+      el.welcomeInfo.classList.add('hidden');
+    } else {
+      el.welcomeInfo.classList.add('hidden');
+    }
+  }
+
+  // ============================================
+  // Wizard: Contacts Screen
+  // ============================================
+
+  function renderContacts(): void {
+    if (!el.contactList) return;
+    el.contactList.innerHTML = '';
+
+    const hasHolder = state.shares.some(s => (s as UIShare).isHolder);
+
+    // Show holder's piece first (if personalized)
+    if (personalization && hasHolder) {
+      const item = document.createElement('div');
+      item.className = 'wiz-contact-item collected';
+      item.innerHTML = `
+        <div class="wiz-checkbox">&#10003;</div>
+        <div class="wiz-contact-details">
+          <div class="wiz-contact-name">${escapeHtml(personalization.holder)}</div>
+          <div class="wiz-contact-info">${t('your_share')}</div>
+        </div>
+      `;
+      el.contactList.appendChild(item);
+    }
+
+    // Show other friends (personalized mode)
+    if (personalization?.otherFriends) {
+      personalization.otherFriends.forEach((friend: FriendInfo) => {
+        const collected = state.shares.some(s =>
+          (friend.shareIndex && s.index === friend.shareIndex) ||
+          (s.holder && s.holder.toLowerCase() === friend.name.toLowerCase())
+        );
+
+        const item = document.createElement('div');
+        item.className = 'wiz-contact-item' + (collected ? ' collected' : '');
+
+        const contactInfo = friend.contact ? linkifyEmail(escapeHtml(friend.contact)) : '';
+
+        item.innerHTML = `
+          <div class="wiz-checkbox">${collected ? '&#10003;' : ''}</div>
+          <div class="wiz-contact-details">
+            <div class="wiz-contact-name">${escapeHtml(friend.name)}</div>
+            <div class="wiz-contact-info">${contactInfo || '—'}</div>
+          </div>
+          ${collected ? '' : `<button class="wiz-add-btn btn btn-secondary" type="button" data-friend-name="${escapeHtml(friend.name)}">${t('wiz_add_piece')}</button>`}
+        `;
+
+        if (!collected) {
+          const btn = item.querySelector('.wiz-add-btn') as HTMLButtonElement;
+          btn?.addEventListener('click', () => {
+            wizardFriendName = friend.name;
+            navigateTo('add-piece');
+          });
+        }
+
+        el.contactList.appendChild(item);
+      });
+    }
+
+    // Show non-personalized collected pieces
+    if (!personalization) {
+      state.shares.forEach((share, i) => {
+        const item = document.createElement('div');
+        item.className = 'wiz-contact-item collected';
+        const name = share.holder || t('wiz_adding_piece', i + 1);
+        item.innerHTML = `
+          <div class="wiz-checkbox">&#10003;</div>
+          <div class="wiz-contact-details">
+            <div class="wiz-contact-name">${escapeHtml(name)}</div>
+          </div>
+        `;
+        el.contactList.appendChild(item);
+      });
+    }
+  }
+
+  function updateProgress(): void {
+    const count = state.shares.length;
+    const threshold = state.threshold || 2;
+
+    if (el.progressFill) {
+      const pct = Math.min(100, Math.round((count / threshold) * 100));
+      el.progressFill.style.width = pct + '%';
+    }
+
+    if (el.progressText) {
+      if (count >= threshold) {
+        el.progressText.textContent = t('ready') + ' — ' + t('shares_of', count, threshold);
+        el.progressText.className = 'step-progress-text ready';
+      } else {
+        const needed = threshold - count;
+        const needLabel = needed === 1 ? t('need_more_one') : t('need_more', needed);
+        el.progressText.textContent = needLabel + ' (' + t('shares_of', count, threshold) + ')';
+        el.progressText.className = 'step-progress-text';
+      }
+    }
+  }
+
+  // ============================================
+  // Wizard: Add Piece Screen
+  // ============================================
+
+  function setupAddPiece(): void {
+    // Set title
+    if (el.addTitle) {
+      el.addTitle.textContent = wizardFriendName
+        ? t('wiz_adding_for', wizardFriendName)
+        : t('wiz_add_piece');
+    }
+
+    // Reset: show methods, hide sub-areas
+    el.methods?.classList.remove('hidden');
+    el.fileArea?.classList.add('hidden');
+    el.pasteArea?.classList.add('hidden');
+
+    // Clear paste input
+    if (el.pasteInput) el.pasteInput.value = '';
+
+    // Clear inline errors
+    if (el.fileDrop) clearInlineError(el.fileDrop);
+  }
+
+  function showMethod(method: 'file' | 'paste'): void {
+    el.methods?.classList.add('hidden');
+    if (method === 'file') {
+      el.fileArea?.classList.remove('hidden');
+    } else {
+      el.pasteArea?.classList.remove('hidden');
+      el.pasteInput?.focus();
+    }
+  }
+
+  // ============================================
+  // Wizard: Word Grid
+  // ============================================
+
+  function buildWordGrid(): void {
+    if (!el.wordGrid) return;
+    el.wordGrid.innerHTML = '';
+
+    for (let i = 0; i < 25; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'wiz-word-cell';
+
+      const label = document.createElement('label');
+      label.textContent = String(i + 1) + '.';
+      label.htmlFor = 'word-' + i;
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'word-' + i;
+      input.className = 'wiz-word-input';
+      input.autocomplete = 'off';
+      input.autocapitalize = 'off';
+      input.spellcheck = false;
+      input.setAttribute('inputmode', 'text');
+
+      input.addEventListener('input', () => handleWordInput(i));
+      input.addEventListener('keydown', (e) => handleWordKeydown(i, e));
+
+      cell.appendChild(label);
+      cell.appendChild(input);
+      el.wordGrid.appendChild(cell);
+    }
+
+    // Focus first field
+    const first = document.getElementById('word-0') as HTMLInputElement;
+    first?.focus();
+
+    // Reset state
+    el.wordsError?.classList.add('hidden');
+    if (el.wordsSubmitBtn) el.wordsSubmitBtn.disabled = true;
+  }
+
+  function handleWordInput(index: number): void {
+    const input = document.getElementById('word-' + index) as HTMLInputElement;
+    if (!input) return;
+
+    const value = input.value;
+
+    // Auto-advance on space
+    if (value.includes(' ')) {
+      const trimmed = value.replace(/\s+/g, '').toLowerCase();
+      input.value = trimmed;
+
+      if (index < 24 && trimmed.length > 0) {
+        const next = document.getElementById('word-' + (index + 1)) as HTMLInputElement;
+        next?.focus();
+      }
+    }
+
+    updateWordsSubmitState();
+  }
+
+  function handleWordKeydown(index: number, event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const input = document.getElementById('word-' + index) as HTMLInputElement;
+      if (input) input.value = input.value.trim().toLowerCase();
+
+      if (index < 24) {
+        const next = document.getElementById('word-' + (index + 1)) as HTMLInputElement;
+        next?.focus();
+      } else {
+        submitWords();
+      }
+    }
+
+    // Backspace on empty field → go to previous
+    if (event.key === 'Backspace') {
+      const input = document.getElementById('word-' + index) as HTMLInputElement;
+      if (input && input.value === '' && index > 0) {
+        event.preventDefault();
+        const prev = document.getElementById('word-' + (index - 1)) as HTMLInputElement;
+        prev?.focus();
+      }
+    }
+  }
+
+  function updateWordsSubmitState(): void {
+    const words = getWordGridValues();
+    const filled = words.filter(w => w.length > 0).length;
+    if (el.wordsSubmitBtn) {
+      el.wordsSubmitBtn.disabled = filled < 25;
+    }
+  }
+
+  function getWordGridValues(): string[] {
+    const words: string[] = [];
+    for (let i = 0; i < 25; i++) {
+      const input = document.getElementById('word-' + i) as HTMLInputElement;
+      words.push(input ? input.value.trim().toLowerCase() : '');
+    }
+    return words;
+  }
+
+  async function submitWords(): Promise<void> {
+    const words = getWordGridValues();
+    const empty = words.findIndex(w => w.length === 0);
+    if (empty >= 0) {
+      const input = document.getElementById('word-' + empty) as HTMLInputElement;
+      input?.focus();
+      return;
+    }
+
+    el.wordsError?.classList.add('hidden');
+
+    try {
+      const result = await decodeShareWords(words);
+      const share = await buildShareFromWords(result);
+      const added = await tryAddShare(share.compact!, { quiet: false });
+      if (added) {
+        afterShareAdded(added);
+      }
+    } catch (err) {
+      // Show error
+      if (el.wordsError) {
+        el.wordsError.textContent = err instanceof Error ? err.message : String(err);
+        el.wordsError.classList.remove('hidden');
+      }
+      toast.error(
+        t('error_invalid_words_title'),
+        err instanceof Error ? err.message : String(err),
+        t('error_invalid_words_guidance')
+      );
+    }
+  }
+
+  // ============================================
   // Initialization
   // ============================================
 
   async function init(): Promise<void> {
-    // Get step card references
-    const cards = document.querySelectorAll('.card');
-    elements.step1Card = cards[0] as HTMLElement || null;
-    elements.step2Card = cards[1] as HTMLElement || null;
-
+    setupWizardButtons();
     setupDropZones();
     setupGlobalDrop();
-    setupButtons();
-    setupPaste();
-    setupScanner();
-
-    // Render contact list immediately
-    if (personalization?.otherFriends && personalization.otherFriends.length > 0) {
-      renderContactList();
-      elements.contactListSection?.classList.remove('hidden');
-    }
 
     // Native crypto is always ready
     window.rememoryAppReady = true;
@@ -310,8 +673,161 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       await loadPersonalizationData();
     }
 
-    // Check URL fragment for compact share (e.g. #share=RM1:2:5:3:BASE64:CHECK)
+    // Check URL fragment for compact share
     await loadShareFromFragment();
+
+    // Setup welcome screen (after personalization loaded)
+    setupWelcome();
+
+    // If everything is already ready (e.g., fragment share + personalized bundle), auto-recover
+    checkRecoverReady();
+  }
+
+  // ============================================
+  // Wizard Button Setup
+  // ============================================
+
+  function setupWizardButtons(): void {
+    // Welcome → Contacts
+    el.beginBtn?.addEventListener('click', () => navigateTo('contacts'));
+
+    // Contacts → Add Piece (generic)
+    el.addPieceBtn?.addEventListener('click', () => {
+      wizardFriendName = null;
+      navigateTo('add-piece');
+    });
+
+    // Add Piece → back to Contacts
+    el.backContactsBtn?.addEventListener('click', () => navigateTo('contacts'));
+
+    // Method selection
+    el.methodFileBtn?.addEventListener('click', () => showMethod('file'));
+    el.methodWordsBtn?.addEventListener('click', () => navigateTo('words'));
+    el.methodPasteBtn?.addEventListener('click', () => showMethod('paste'));
+
+    // Words → back to Add Piece
+    el.backMethodsBtn?.addEventListener('click', () => navigateTo('add-piece'));
+
+    // Word submit
+    el.wordsSubmitBtn?.addEventListener('click', () => submitWords());
+
+    // Paste submit
+    el.pasteSubmitBtn?.addEventListener('click', () => {
+      const val = el.pasteInput?.value?.trim();
+      if (val) parseAndAddShareFromPaste(val);
+    });
+
+    // Paste: support Ctrl+Enter
+    el.pasteInput?.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        const val = el.pasteInput?.value?.trim();
+        if (val) parseAndAddShareFromPaste(val);
+      }
+    });
+
+    // Download
+    el.downloadAllBtn?.addEventListener('click', downloadAll);
+  }
+
+  // ============================================
+  // Drop Zones
+  // ============================================
+
+  function setupDropZones(): void {
+    // Share file drop zone (in add-piece screen)
+    setupSingleDropZone(el.fileDrop, el.fileInput, handleShareFiles);
+
+    // Manifest drop zone (in recovery screen)
+    setupSingleDropZone(el.manifestDrop, el.manifestInput, handleManifestFiles);
+  }
+
+  function setupSingleDropZone(
+    dropZone: HTMLElement | null,
+    fileInput: HTMLInputElement | null,
+    handler: (files: FileList) => void
+  ): void {
+    if (!dropZone) return;
+
+    dropZone.addEventListener('click', () => fileInput?.click());
+    dropZone.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput?.click();
+      }
+    });
+
+    dropZone.addEventListener('dragover', (e: DragEvent) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e: DragEvent) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer?.files?.length) {
+        handler(e.dataTransfer.files);
+      }
+    });
+
+    fileInput?.addEventListener('change', () => {
+      if (fileInput.files?.length) {
+        handler(fileInput.files);
+        fileInput.value = '';
+      }
+    });
+  }
+
+  function handleShareFiles(files: FileList): void {
+    handleFilesUnified(files);
+  }
+
+  function handleManifestFiles(files: FileList): void {
+    for (let i = 0; i < files.length; i++) {
+      handleAnyFile(files[i]);
+    }
+  }
+
+  function setupGlobalDrop(): void {
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) {
+        document.body.classList.add('drag-active');
+      }
+    });
+
+    document.addEventListener('dragleave', () => {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        document.body.classList.remove('drag-active');
+      }
+    });
+
+    document.addEventListener('dragover', (e: DragEvent) => {
+      e.preventDefault();
+    });
+
+    document.addEventListener('drop', (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter = 0;
+      document.body.classList.remove('drag-active');
+
+      // Only handle drops that didn't land on a drop zone
+      const target = e.target as HTMLElement;
+      if (target.closest('.drop-zone')) return;
+
+      if (e.dataTransfer?.files?.length) {
+        handleFilesUnified(e.dataTransfer.files);
+      }
+    });
   }
 
   // ============================================
@@ -330,14 +846,12 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         state.threshold = share.threshold;
         state.total = share.total;
         state.shares.push(share);
-        updateSharesUI();
-        updateContactList();
       } catch {
         // Silently ignore invalid holder share
       }
     }
 
-    // Load embedded manifest if available (included when MANIFEST.age is small enough)
+    // Load embedded manifest if available
     if (personalization.manifestB64) {
       const binary = atob(personalization.manifestB64);
       const bytes = new Uint8Array(binary.length);
@@ -345,10 +859,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         bytes[i] = binary.charCodeAt(i);
       }
       state.manifest = bytes;
-      showManifestLoaded('MANIFEST.age', state.manifest.length, 'embedded');
     }
-
-    checkRecoverReady();
   }
 
   // ============================================
@@ -373,8 +884,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       }
 
       state.shares.push(share);
-      updateSharesUI();
-      checkRecoverReady();
 
       // Clear the fragment from the URL bar to avoid re-importing on reload
       if (window.history?.replaceState) {
@@ -385,709 +894,376 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     }
   }
 
-  function renderContactList(): void {
-    if (!personalization?.otherFriends || !elements.contactList) return;
-
-    elements.contactList.innerHTML = '';
-
-    personalization.otherFriends.forEach((friend: FriendInfo) => {
-      const item = document.createElement('div');
-      item.className = 'contact-item';
-      item.dataset.name = friend.name;
-      if (friend.shareIndex) {
-        item.dataset.shareIndex = String(friend.shareIndex);
-      }
-
-      const contactInfo = friend.contact ? linkifyEmail(escapeHtml(friend.contact)) : '';
-
-      item.innerHTML = `
-        <div class="checkbox"></div>
-        <div class="details">
-          <div class="name">${escapeHtml(friend.name)}</div>
-          <div class="contact-info">${contactInfo || '—'}</div>
-        </div>
-      `;
-
-      elements.contactList?.appendChild(item);
-    });
-  }
-
-  function updateContactList(): void {
-    if (!personalization?.otherFriends || !elements.contactList) return;
-
-    const collectedNames = new Set(
-      state.shares.map(s => s.holder?.toLowerCase()).filter(Boolean)
-    );
-    const collectedIndices = new Set(state.shares.map(s => s.index));
-
-    elements.contactList.querySelectorAll('.contact-item').forEach(item => {
-      const el = item as HTMLElement;
-      const name = el.dataset.name?.toLowerCase();
-      const shareIndex = el.dataset.shareIndex ? parseInt(el.dataset.shareIndex, 10) : 0;
-      const isCollected = (name ? collectedNames.has(name) : false) || collectedIndices.has(shareIndex);
-      el.classList.toggle('collected', isCollected);
-      const checkbox = el.querySelector('.checkbox');
-      if (checkbox) {
-        checkbox.textContent = isCollected ? '✓' : '';
-      }
-    });
-  }
-
   // ============================================
-  // Drop Zone Setup
+  // File Handling
   // ============================================
 
-  function setupDropZones(): void {
-    // Both drop zones use the same unified handler - file type is auto-detected
-    if (elements.shareDropZone && elements.shareFileInput) {
-      setupDropZone(elements.shareDropZone, elements.shareFileInput, handleFilesUnified);
-    }
-    if (elements.manifestDropZone && elements.manifestFileInput) {
-      setupDropZone(elements.manifestDropZone, elements.manifestFileInput, handleFilesUnified);
+  function handleFilesUnified(files: FileList): void {
+    for (let i = 0; i < files.length; i++) {
+      handleAnyFile(files[i]);
     }
   }
 
-  async function handleFilesUnified(files: FileList | File[]): Promise<void> {
-    for (const file of Array.from(files)) {
-      await handleAnyFile(file);
-    }
-  }
-
-  function setupDropZone(
-    dropZone: HTMLElement,
-    fileInput: HTMLInputElement,
-    handler: (files: FileList | File[]) => Promise<void>
-  ): void {
-    dropZone.addEventListener('click', () => fileInput.click());
-
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('dragover');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // Prevent global handler from also processing
-      dropZone.classList.remove('dragover');
-      document.body.classList.remove('drag-active');
-      if (e.dataTransfer?.files) {
-        handler(e.dataTransfer.files);
-      }
-    });
-
-    fileInput.addEventListener('change', async (e) => {
-      const target = e.target as HTMLInputElement;
-      const files = Array.from(target.files || []);
-      target.value = '';
-      await handler(files);
-    });
-  }
-
-  // ============================================
-  // Global Drop (drop anywhere on page)
-  // ============================================
-
-  function setupGlobalDrop(): void {
-    // Prevent default drag behavior on the whole document
-    document.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      document.body.classList.add('drag-active');
-    });
-
-    document.addEventListener('dragleave', (e) => {
-      // Only remove class when leaving the document entirely
-      if (e.relatedTarget === null) {
-        document.body.classList.remove('drag-active');
-      }
-    });
-
-    document.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      document.body.classList.remove('drag-active');
-
-      const files = e.dataTransfer?.files;
-      if (!files || files.length === 0) return;
-
-      // Process each file through the unified handler
-      for (const file of Array.from(files)) {
-        await handleAnyFile(file);
-      }
-    });
-  }
-
-  /**
-   * Try to add a parsed share to state. Returns true if added.
-   * When quiet is true, silently skips duplicates instead of showing an error.
-   */
-  async function tryAddShare(shareContent: string, { quiet = false } = {}): Promise<boolean> {
-    const share = await parseShare(shareContent);
-    share.compact = await encodeCompact(share);
-
-    if (state.shares.some(s => s.index === share.index)) {
-      if (!quiet) errorHandlers.duplicateShare(share.index);
-      return false;
-    }
-
-    // Check for metadata mismatches against existing shares
-    if (state.shares.length > 0) {
-      const first = state.shares[0];
-
-      if (share.version !== first.version) {
-        errorHandlers.mismatchedShare('version');
-        return false;
-      }
-      if (first.total > 0 && first.threshold > 0 &&
-          (share.total !== first.total || share.threshold !== first.threshold)) {
-        errorHandlers.mismatchedShare('metadata');
-        return false;
-      }
-      if (share.created) {
-        const withTimestamp = state.shares.find(s => s.created);
-        if (withTimestamp && share.created !== withTimestamp.created) {
-          errorHandlers.mismatchedShare('created');
-          return false;
-        }
-      }
-    }
-
-    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
-      state.threshold = share.threshold;
-      state.total = share.total;
-    }
-
-    state.shares.push(share);
-    updateSharesUI();
-    return true;
-  }
-
-  function showUnrecognizedFileError(filename: string): void {
-    showError(
-      t('error_unrecognized_file_message', filename),
-      {
-        title: t('error_unrecognized_file_title'),
-        guidance: t('error_unrecognized_file_guidance'),
-      }
-    );
-  }
-
-  /**
-   * Unified file handler - detects file type and processes accordingly.
-   */
   async function handleAnyFile(file: File): Promise<void> {
     const name = file.name.toLowerCase();
 
     try {
-      // ZIP bundle - contains share + manifest
-      if (name.endsWith('.zip') || file.type === 'application/zip') {
-        await handleBundleZipUnified(file);
+      if (name.endsWith('.zip')) {
+        const data = await readFileAsArrayBuffer(file);
+        await handleBundleZipUnified(data, file.name);
         return;
       }
 
-      // HTML file - may contain share + manifest
       if (name.endsWith('.html') || name.endsWith('.htm')) {
-        await handleHTMLUnified(file);
+        const text = await readFileAsText(file);
+        await handleHTMLUnified(text, file.name);
         return;
       }
 
-      // .age file - manifest only
       if (name.endsWith('.age')) {
-        const buffer = await readFileAsArrayBuffer(file);
-        state.manifest = new Uint8Array(buffer);
-        showManifestLoaded(file.name, state.manifest.length);
-        highlightSection('manifest');
+        const data = await readFileAsArrayBuffer(file);
+        state.manifest = new Uint8Array(data);
+        showManifestLoaded(file.name, state.manifest.length, 'file');
         checkRecoverReady();
         return;
       }
 
-      // PDF or TXT - try to parse as share
-      if (name.endsWith('.pdf') || name.endsWith('.txt')) {
-        const content = await readFileAsText(file);
-        await parseAndAddShareUnified(content, file.name);
+      // PDF or TXT — try to extract share
+      if (name.endsWith('.pdf') || name.endsWith('.txt') || name === 'readme') {
+        const text = await readFileAsText(file);
+        await parseAndAddShareUnified(text, file.name);
         return;
       }
 
-      // Unknown file type - try to parse as share (might be README with different name)
-      const content = await readFileAsText(file);
-      if (shareRegex.test(content)) {
-        await parseAndAddShareUnified(content, file.name);
-      } else {
-        showUnrecognizedFileError(file.name);
-      }
+      // Unknown file type — try as text
+      const text = await readFileAsText(file);
+      await parseAndAddShareUnified(text, file.name);
+
     } catch (err) {
       errorHandlers.fileReadFailed(file.name);
     }
   }
 
-  /**
-   * Handle ZIP bundle - extract share and manifest, always replace manifest.
-   */
-  async function handleBundleZipUnified(file: File): Promise<void> {
-    const buffer = await readFileAsArrayBuffer(file);
-    const zipData = new Uint8Array(buffer);
-
+  async function handleBundleZipUnified(zipData: ArrayBuffer, fileName: string): Promise<void> {
     try {
-      const bundle = extractBundle(zipData);
+      const bundle = await extractBundle(new Uint8Array(zipData));
+
       let addedShare = false;
       let addedManifest = false;
 
-      if (bundle.share) {
-        addedShare = await tryAddShare(bundle.share);
+      // Extract share from README
+      if (bundle.readme) {
+        const share = await tryAddShare(bundle.readme, { quiet: true });
+        if (share) {
+          addedShare = true;
+          afterShareAdded(share);
+        }
       }
 
-      if (bundle.manifest) {
+      // Extract manifest
+      if (bundle.manifest && !state.manifest) {
         state.manifest = bundle.manifest;
-        showManifestLoaded('MANIFEST.age', state.manifest.length, 'bundle');
         addedManifest = true;
       }
 
-      highlightAddedSections(addedShare, addedManifest);
-      checkRecoverReady();
-    } catch {
-      showError(
-        t('error_bundle_extract_message', file.name),
-        {
-          title: t('error_bundle_extract_title'),
-          guidance: t('error_bundle_extract_guidance'),
+      // Extract from HTML (fallback if README didn't have a share)
+      if (bundle.html && !addedShare) {
+        const personalizationData = extractPersonalizationFromHTML(bundle.html);
+        if (personalizationData) {
+          const hasManifest = !!personalizationData.manifestB64;
+
+          if (personalizationData.manifestB64 && !state.manifest) {
+            const binary = atob(personalizationData.manifestB64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            state.manifest = bytes;
+            addedManifest = true;
+          }
+
+          if (personalizationData.holderShare) {
+            try {
+              const htmlShare = await tryAddShare(personalizationData.holderShare, { quiet: hasManifest });
+              if (htmlShare) {
+                addedShare = true;
+                afterShareAdded(htmlShare);
+              }
+            } catch { /* ignore */ }
+          }
         }
+      }
+
+      // Show feedback
+      if (addedManifest) {
+        showManifestLoaded(fileName, state.manifest!.length, 'bundle');
+      }
+      if (!addedShare && !addedManifest) {
+        toast.error(
+          t('error_bundle_extract_title'),
+          t('error_bundle_extract_message', fileName),
+          t('error_bundle_extract_guidance')
+        );
+      }
+
+      checkRecoverReady();
+
+    } catch {
+      toast.error(
+        t('error_bundle_extract_title'),
+        t('error_bundle_extract_message', fileName),
+        t('error_bundle_extract_guidance')
       );
     }
   }
 
-  /**
-   * Handle HTML file - extract share and manifest, always replace manifest.
-   */
-  async function handleHTMLUnified(file: File): Promise<void> {
-    const text = await readFileAsText(file);
-
+  async function handleHTMLUnified(text: string, fileName: string): Promise<void> {
     const personalizationData = extractPersonalizationFromHTML(text);
     if (!personalizationData) {
-      showUnrecognizedFileError(file.name);
+      // Try as plain text (maybe .html file with just text content)
+      await parseAndAddShareUnified(text, fileName);
       return;
     }
 
-    try {
-      let addedShare = false;
-      let addedManifest = false;
-      const hasManifest = !!personalizationData.manifestB64;
+    let addedShare = false;
 
-      if (personalizationData.manifestB64) {
-        const binary = atob(personalizationData.manifestB64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        state.manifest = bytes;
-        showManifestLoaded('MANIFEST.age', state.manifest.length, 'html');
-        addedManifest = true;
+    if (personalizationData.manifestB64 && !state.manifest) {
+      const binary = atob(personalizationData.manifestB64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
-
-      if (personalizationData.holderShare) {
-        try {
-          // Suppress duplicate warning if we got a manifest — the file was still useful
-          addedShare = await tryAddShare(personalizationData.holderShare, { quiet: hasManifest });
-        } catch {
-          // Ignore invalid share
-        }
-      }
-
-      if (!addedShare && !addedManifest) {
-        showUnrecognizedFileError(file.name);
-      } else {
-        highlightAddedSections(addedShare, addedManifest);
-      }
-
-      checkRecoverReady();
-    } catch {
-      showUnrecognizedFileError(file.name);
+      state.manifest = bytes;
+      showManifestLoaded(fileName, state.manifest.length, 'html');
     }
+
+    if (personalizationData.holderShare) {
+      const share = await tryAddShare(personalizationData.holderShare, { quiet: !!personalizationData.manifestB64 });
+      if (share) addedShare = true;
+    }
+
+    if (!addedShare && !personalizationData.manifestB64) {
+      toast.warning(
+        t('error_no_share_title'),
+        t('error_no_share_message', fileName),
+        t('error_html_no_share_guidance')
+      );
+    }
+
+    checkRecoverReady();
   }
 
-  /**
-   * Parse and add share with section highlighting.
-   */
-  async function parseAndAddShareUnified(content: string, filename: string): Promise<void> {
-    if (!shareRegex.test(content)) {
-      errorHandlers.noShareFound(filename);
-      return;
-    }
-
-    try {
-      const added = await tryAddShare(content);
-      if (added) {
-        highlightSection('share');
-        checkRecoverReady();
-      }
-    } catch (err) {
-      errorHandlers.invalidShare(filename, err instanceof Error ? err.message : undefined);
-    }
-  }
-
-  /**
-   * Briefly highlight a section to show where content was added.
-   */
-  function highlightSection(section: 'share' | 'manifest' | 'both'): void {
-    const highlightDuration = 600;
-
-    if (section === 'share' || section === 'both') {
-      elements.step1Card?.classList.add('highlight-added');
-      setTimeout(() => elements.step1Card?.classList.remove('highlight-added'), highlightDuration);
-    }
-
-    if (section === 'manifest' || section === 'both') {
-      elements.step2Card?.classList.add('highlight-added');
-      setTimeout(() => elements.step2Card?.classList.remove('highlight-added'), highlightDuration);
-    }
-  }
-
-  function highlightAddedSections(addedShare: boolean, addedManifest: boolean): void {
-    if (addedShare && addedManifest) {
-      highlightSection('both');
-    } else if (addedShare) {
-      highlightSection('share');
-    } else if (addedManifest) {
-      highlightSection('manifest');
-    }
-  }
-
-  // ============================================
-  // Paste Functionality
-  // ============================================
-
-  function setupPaste(): void {
-    elements.pasteToggleBtn?.addEventListener('click', () => {
-      const isHidden = elements.pasteArea?.classList.contains('hidden');
-      elements.pasteArea?.classList.toggle('hidden', !isHidden);
-      if (isHidden) {
-        elements.pasteInput?.focus();
-      }
-    });
-
-    elements.pasteSubmitBtn?.addEventListener('click', async () => {
-      const content = elements.pasteInput?.value.trim();
-      if (!content) return;
-
-      await parseAndAddShareFromPaste(content);
-      if (elements.pasteInput) elements.pasteInput.value = '';
-      elements.pasteArea?.classList.add('hidden');
-    });
-
-    elements.pasteInput?.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        elements.pasteSubmitBtn?.click();
-      }
-    });
-  }
-
-  async function parseAndAddShareFromPaste(content: string): Promise<void> {
-    if (elements.shareDropZone) {
-      clearInlineError(elements.shareDropZone);
-    }
-
-    let share: UIShare | undefined;
-
-    // Try compact format first
-    if (compactShareRegex.test(content.trim())) {
-      try {
-        share = await parseCompactShare(content.trim());
-      } catch (err) {
-        showError(
-          err instanceof Error ? err.message : t('error_invalid_share_message', t('pasted_content')),
-          {
-            title: t('error_invalid_share_title'),
-            guidance: t('error_invalid_share_guidance')
-          }
-        );
+  async function parseAndAddShareUnified(text: string, filename: string): Promise<void> {
+    // Try PEM format first
+    if (shareRegex.test(text)) {
+      const share = await tryAddShare(text, { quiet: false });
+      if (share) {
+        afterShareAdded(share);
         return;
       }
-    } else if (shareRegex.test(content)) {
-      // Try PEM format
+    }
+
+    // Try compact format
+    const compactMatch = text.match(/RM\d+:\d+:\d+:\d+:[A-Za-z0-9_-]+:[0-9a-f]{4}/);
+    if (compactMatch) {
       try {
-        share = await parseShare(content);
-        share.compact = await encodeCompact(share);
-      } catch {
-        showError(
-          t('error_invalid_share_message', t('pasted_content')),
-          {
-            title: t('error_invalid_share_title'),
-            guidance: t('error_invalid_share_guidance')
+        const share = await parseCompactShare(compactMatch[0]);
+        if (!state.shares.some(s => s.index === share.index)) {
+          if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+            state.threshold = share.threshold;
+            state.total = share.total;
           }
-        );
-        return;
-      }
-    } else {
-      // Try to extract BIP39 words from the pasted text
-      const extractedWords = extractWordsFromText(content);
-      if (extractedWords.length >= 25) {
-        try {
-          const wordResult = await decodeShareWords(extractedWords);
-          share = buildShareFromWords(wordResult);
-        } catch (err) {
-          // Words were detected but decoding failed — show the specific error
-          toast.error(
-            t('error_invalid_words_title'),
-            err instanceof Error ? err.message : String(err),
-            t('error_invalid_words_guidance')
-          );
+          state.shares.push(share);
+          afterShareAdded(share);
+          checkRecoverReady();
           return;
         }
-      }
+      } catch { /* fall through */ }
+    }
 
-      if (!share) {
-        showError(
-          t('error_paste_no_share_message'),
-          {
-            title: t('error_paste_no_share_title'),
-            guidance: t('error_paste_no_share_guidance')
-          }
+    // Try word extraction
+    const words = extractWordsFromText(text);
+    if (words.length >= 25) {
+      try {
+        const result = await decodeShareWords(words.slice(0, 25));
+        const share = await buildShareFromWords(result);
+        const added = await tryAddShare(share.compact!, { quiet: false });
+        if (added) {
+          afterShareAdded(added);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+
+    errorHandlers.noShareFound(filename);
+  }
+
+  // ============================================
+  // Share Management
+  // ============================================
+
+  async function tryAddShare(content: string, opts: { quiet?: boolean } = {}): Promise<UIShare | null> {
+    const { quiet } = opts;
+
+    let share: UIShare;
+    try {
+      // Try compact format first
+      if (compactShareRegex.test(content.trim())) {
+        share = await parseCompactShare(content.trim());
+      } else {
+        share = await parseShare(content);
+      }
+      share.compact = share.compact || await encodeCompact(share);
+    } catch (err) {
+      if (!quiet) {
+        toast.error(
+          t('error_invalid_share_title'),
+          err instanceof Error ? err.message : String(err),
+          t('error_invalid_share_guidance')
         );
-        return;
+      }
+      return null;
+    }
+
+    // Check for duplicates
+    if (state.shares.some(s => s.index === share.index)) {
+      if (!quiet) errorHandlers.duplicateShare(share.index);
+      return null;
+    }
+
+    // Check metadata consistency
+    if (state.shares.length > 0) {
+      const existing = state.shares[0];
+      if (share.version !== existing.version) {
+        errorHandlers.mismatchedShare('version');
+        return null;
+      }
+      if (share.threshold !== existing.threshold || share.total !== existing.total) {
+        errorHandlers.mismatchedShare('metadata');
+        return null;
+      }
+      // Check created timestamp (allow 1-second tolerance)
+      if (share.created && existing.created) {
+        const diff = Math.abs(new Date(share.created).getTime() - new Date(existing.created).getTime());
+        if (diff > 1000) {
+          errorHandlers.mismatchedShare('created');
+          return null;
+        }
       }
     }
 
-    if (state.shares.some(s => s.index === share!.index)) {
-      errorHandlers.duplicateShare(share!.index);
-      return;
-    }
-
-    if (state.shares.length === 0 || (state.threshold === 0 && share.threshold > 0)) {
+    // Set threshold/total from first share
+    if (state.threshold === 0 && share.threshold > 0) {
       state.threshold = share.threshold;
       state.total = share.total;
     }
 
     state.shares.push(share);
-    updateSharesUI();
+    return share;
+  }
+
+  function afterShareAdded(share: ParsedShare): void {
+    updateProgress();
+    renderContacts();
+
+    // Show success feedback
+    const name = share.holder || wizardFriendName;
+    if (name) {
+      toast.success('', t('wiz_piece_added', name));
+    } else {
+      toast.success('', t('wiz_piece_added_anon'));
+    }
+
+    // Navigate: recovery if ready, otherwise contacts
     checkRecoverReady();
+
+    // If we didn't navigate to recovery, go to contacts after a brief pause
+    if (wizardScreen === 'add-piece' || wizardScreen === 'words') {
+      setTimeout(() => {
+        if (wizardScreen !== 'recovery') {
+          navigateTo('contacts');
+        }
+      }, 600);
+    }
   }
 
-  // ============================================
-  // Build Share from Decoded Words
-  // ============================================
-
-  function buildShareFromWords(wordResult: { data: Uint8Array; index: number }): UIShare {
-    // Get version/total/threshold from first loaded share or personalization
-    let version = 2;
-    let total = 0;
-    let threshold = 0;
-
-    if (state.shares.length > 0) {
-      version = state.shares[0].version;
-      total = state.total;
-      threshold = state.threshold;
-    } else if (personalization) {
-      total = personalization.total;
-      threshold = personalization.threshold;
+  async function parseAndAddShareFromPaste(content: string): Promise<void> {
+    // Try compact format
+    const trimmed = content.trim();
+    if (compactShareRegex.test(trimmed)) {
+      try {
+        const share = await tryAddShare(trimmed, { quiet: false });
+        if (share) {
+          afterShareAdded(share);
+          return;
+        }
+      } catch { /* fall through */ }
     }
 
-    return {
-      version,
-      index: wordResult.index,
-      threshold,
-      total,
-      data: wordResult.data,
-      dataB64: bytesToBase64(wordResult.data),
-    };
-  }
-
-  // ============================================
-  // QR Code Scanner (BarcodeDetector API)
-  // ============================================
-
-  let scannerStream: MediaStream | null = null;
-  let scannerAnimFrame: number | null = null;
-
-  function setupScanner(): void {
-    // Only show the button if BarcodeDetector is available
-    if (!('BarcodeDetector' in window)) return;
-
-    elements.scanQrBtn?.classList.remove('hidden');
-    elements.scanQrBtn?.addEventListener('click', () => {
-      openScanner();
-    });
-
-    elements.qrScannerClose?.addEventListener('click', closeScanner);
-  }
-
-  async function openScanner(): Promise<void> {
-    elements.qrScannerModal?.classList.remove('hidden');
-
-    try {
-      scannerStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      });
-    } catch (_err) {
-      toast.warning(t('scan_camera_error'), t('scan_camera_error'));
-      closeScanner();
-      return;
-    }
-
-    if (elements.qrVideo) {
-      elements.qrVideo.srcObject = scannerStream;
-    }
-
-    const detector = new BarcodeDetector({ formats: ['qr_code'] });
-
-    function scanLoop(): void {
-      if (!scannerStream || !elements.qrVideo) return;
-
-      // Wait until video is playing and has dimensions
-      if (elements.qrVideo.readyState < 2 || elements.qrVideo.videoWidth === 0) {
-        scannerAnimFrame = requestAnimationFrame(scanLoop);
+    // Try PEM format
+    if (shareRegex.test(content)) {
+      const share = await tryAddShare(content, { quiet: false });
+      if (share) {
+        afterShareAdded(share);
         return;
       }
+      return; // tryAddShare already showed error
+    }
 
-      detector.detect(elements.qrVideo).then(barcodes => {
-        if (!scannerStream) return; // Scanner was closed
-
-        for (const barcode of barcodes) {
-          const value = barcode.rawValue.trim();
-          // Check for compact share format directly or URL with fragment
-          let compact = '';
-          if (compactShareRegex.test(value)) {
-            compact = value;
-          } else {
-            // Check for URL with #share= fragment
-            try {
-              const url = new URL(value);
-              const hash = url.hash;
-              if (hash && hash.startsWith('#share=')) {
-                const decoded = decodeURIComponent(hash.slice('#share='.length));
-                if (compactShareRegex.test(decoded)) {
-                  compact = decoded;
-                }
-              }
-            } catch {
-              // Not a URL, ignore
-            }
-          }
-
-          if (compact) {
-            handleScannedShare(compact);
-            return;
-          }
+    // Try BIP39 words
+    const words = extractWordsFromText(content);
+    if (words.length >= 25) {
+      try {
+        const result = await decodeShareWords(words.slice(0, 25));
+        const share = await buildShareFromWords(result);
+        const added = await tryAddShare(share.compact!, { quiet: false });
+        if (added) {
+          afterShareAdded(added);
+          return;
         }
-
-        scannerAnimFrame = requestAnimationFrame(scanLoop);
-      }).catch(() => {
-        // Detection error, keep trying
-        scannerAnimFrame = requestAnimationFrame(scanLoop);
-      });
-    }
-
-    scannerAnimFrame = requestAnimationFrame(scanLoop);
-  }
-
-  async function handleScannedShare(compact: string): Promise<void> {
-    closeScanner();
-    await parseAndAddShareFromPaste(compact);
-  }
-
-  function closeScanner(): void {
-    if (scannerAnimFrame !== null) {
-      cancelAnimationFrame(scannerAnimFrame);
-      scannerAnimFrame = null;
-    }
-
-    if (scannerStream) {
-      scannerStream.getTracks().forEach(track => track.stop());
-      scannerStream = null;
-    }
-
-    if (elements.qrVideo) {
-      elements.qrVideo.srcObject = null;
-    }
-
-    elements.qrScannerModal?.classList.add('hidden');
-  }
-
-  // ============================================
-  // Shares UI
-  // ============================================
-
-  // Resolve a display name for a share: use holder if set, otherwise look up
-  // the friend name from personalization data by share index, fall back to generic.
-  function resolveShareName(share: UIShare): string {
-    if (share.holder) return share.holder;
-    if (personalization) {
-      if (personalization.holder) {
-        // Check if this matches the bundle holder's own share index
-        const holderShare = state.shares.find(s => (s as UIShare).isHolder);
-        if (holderShare && holderShare.index === share.index) {
-          return personalization.holder;
-        }
+      } catch (err) {
+        toast.error(
+          t('error_invalid_words_title'),
+          err instanceof Error ? err.message : String(err),
+          t('error_invalid_words_guidance')
+        );
+        return;
       }
-      const friend = personalization.otherFriends.find(f => f.shareIndex === share.index);
-      if (friend) return friend.name;
     }
-    return 'Share ' + share.index;
+
+    // Nothing worked
+    toast.error(
+      t('error_paste_no_share_title'),
+      t('error_paste_no_share_message'),
+      t('error_paste_no_share_guidance')
+    );
   }
 
-  function updateSharesUI(): void {
-    if (!elements.sharesList) return;
+  async function buildShareFromWords(result: { data: Uint8Array; index: number }): Promise<UIShare> {
+    const dataB64 = bytesToBase64(result.data);
+    const index = result.index || 0;
 
-    elements.sharesList.innerHTML = '';
+    const version = state.shares.length > 0 ? state.shares[0].version : 2;
+    const threshold = state.threshold || 0;
+    const total = state.total || 0;
 
-    state.shares.forEach((share, idx) => {
-      const item = document.createElement('div');
-      item.className = 'share-item valid';
+    const share: UIShare = {
+      version,
+      index,
+      total,
+      threshold,
+      dataB64,
+      data: result.data,
+      holder: resolveShareName(index),
+    };
+    share.compact = await encodeCompact(share);
+    return share;
+  }
 
-      const displayName = resolveShareName(share as UIShare);
-
-      const isHolderShare = (share as UIShare).isHolder ||
-        (personalization && share.holder &&
-         share.holder.toLowerCase() === personalization.holder.toLowerCase());
-
-      const holderLabel = isHolderShare ? ` (${t('your_share')})` : '';
-      const showRemove = !isHolderShare;
-
-      item.innerHTML = `
-        <span class="icon">&#9989;</span>
-        <div class="details">
-          <div class="name">${escapeHtml(displayName)}${holderLabel}</div>
-        </div>
-        ${showRemove ? `<button class="remove" data-idx="${idx}" title="${t('remove')}">&times;</button>` : ''}
-      `;
-      elements.sharesList?.appendChild(item);
-    });
-
-    // Add remove handlers
-    elements.sharesList.querySelectorAll('.remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        const idx = parseInt(target.dataset.idx || '0', 10);
-        state.shares.splice(idx, 1);
-        if (state.shares.length === 0) {
-          state.threshold = 0;
-          state.total = 0;
-        }
-        updateSharesUI();
-        updateContactList();
-        checkRecoverReady();
-      });
-    });
-
-    // Update threshold info
-    if (state.threshold > 0 && elements.thresholdInfo) {
-      const needed = Math.max(0, state.threshold - state.shares.length);
-      const needLabel = needed === 1 ? t('need_more_one') : t('need_more', needed);
-      elements.thresholdInfo.innerHTML = needed > 0
-        ? `&#128274; ${needLabel} (${t('shares_of', state.shares.length, state.threshold)})`
-        : `&#9989; ${t('ready')} (${t('shares_of', state.shares.length, state.threshold)})`;
-      elements.thresholdInfo.className = 'threshold-info' + (needed === 0 ? ' ready' : '');
-      elements.thresholdInfo.classList.remove('hidden');
-
-      // Collapse step 1 content when threshold is met
-      elements.step1Card?.classList.toggle('threshold-met', needed === 0);
-    } else {
-      elements.thresholdInfo?.classList.add('hidden');
-      elements.step1Card?.classList.remove('threshold-met');
-    }
-
-    updateContactList();
+  function resolveShareName(index: number): string | undefined {
+    if (!personalization?.otherFriends) return undefined;
+    const friend = personalization.otherFriends.find(f => f.shareIndex === index);
+    return friend?.name;
   }
 
   // ============================================
@@ -1095,9 +1271,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   // ============================================
 
   function showManifestLoaded(filename: string, size: number, source: 'file' | 'bundle' | 'embedded' | 'html' | 'server' = 'file'): void {
-    elements.manifestDropZone?.classList.add('hidden');
+    // If on recovery screen, hide the drop zone and show status
+    el.manifestDrop?.classList.add('hidden');
 
-    if (elements.manifestStatus) {
+    if (el.manifestStatus) {
       const sourceLabels: Record<string, string> = {
         file: t('loaded'),
         bundle: t('manifest_loaded_bundle'),
@@ -1106,7 +1283,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         server: t('loaded'),
       };
       const sourceLabel = sourceLabels[source] || t('loaded');
-      elements.manifestStatus.innerHTML = `
+      el.manifestStatus.innerHTML = `
         <span class="icon">&#9989;</span>
         <div style="flex: 1;">
           <strong>${escapeHtml(filename)}</strong> ${sourceLabel}
@@ -1114,10 +1291,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         </div>
         <button class="clear-manifest" title="${t('remove')}">&times;</button>
       `;
-      elements.manifestStatus.classList.remove('hidden');
-      elements.manifestStatus.classList.add('loaded');
+      el.manifestStatus.classList.remove('hidden');
+      el.manifestStatus.classList.add('loaded');
 
-      const clearBtn = elements.manifestStatus.querySelector('.clear-manifest');
+      const clearBtn = el.manifestStatus.querySelector('.clear-manifest');
       clearBtn?.addEventListener('click', clearManifest);
     }
   }
@@ -1125,19 +1302,26 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   function clearManifest(): void {
     state.manifest = null;
     hideTlockWaiting();
-    elements.manifestStatus?.classList.add('hidden');
-    elements.manifestStatus?.classList.remove('loaded');
-    elements.manifestDropZone?.classList.remove('hidden');
-    checkRecoverReady();
+    el.manifestStatus?.classList.add('hidden');
+    el.manifestStatus?.classList.remove('loaded');
+    el.manifestDrop?.classList.remove('hidden');
   }
 
   // ============================================
-  // Buttons Setup
+  // Recovery Screen Setup
   // ============================================
 
-  function setupButtons(): void {
-    elements.recoverBtn?.addEventListener('click', startRecovery);
-    elements.downloadAllBtn?.addEventListener('click', downloadAll);
+  function setupRecoveryScreen(): void {
+    // Check if manifest is needed
+    if (!state.manifest) {
+      el.manifestArea?.classList.remove('hidden');
+    } else {
+      el.manifestArea?.classList.add('hidden');
+      // Auto-start if conditions met
+      if (!state.recovering && !state.recoveryComplete) {
+        startRecovery();
+      }
+    }
   }
 
   function checkRecoverReady(): void {
@@ -1146,42 +1330,33 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       (state.threshold === 0 && state.shares.length >= 2)
     );
 
-    if (elements.recoverBtn) {
-      elements.recoverBtn.disabled = !ready;
-    }
-
     if (ready && !state.recovering && !state.recoveryComplete) {
-      startRecovery();
+      navigateTo('recovery');
     }
   }
 
-  function showTlockWaiting(unlockDate: Date): void {
-    if (!__TLOCK__ || !elements.tlockWaiting || !tlockRecover) return;
+  // ============================================
+  // Tlock UI
+  // ============================================
 
-    if (elements.tlockWaitingDate) {
+  function showTlockWaiting(unlockDate: Date): void {
+    if (!__TLOCK__ || !el.tlockWaiting || !tlockRecover) return;
+
+    if (el.tlockWaitingDate) {
       const fmt = tlockRecover.formatUnlockDate(unlockDate, t);
       const boldDate = `<strong>${fmt.text}</strong>`;
-      elements.tlockWaitingDate.innerHTML = fmt.relative
+      el.tlockWaitingDate.innerHTML = fmt.relative
         ? t('tlock_waiting_message_relative', boldDate)
         : t('tlock_waiting_message', boldDate);
     }
-    elements.tlockWaiting.classList.remove('hidden');
-    if (elements.recoverBtn) elements.recoverBtn.classList.add('hidden');
-    elements.progressBar?.classList.add('hidden');
-    if (elements.statusMessage) elements.statusMessage.textContent = '';
+    el.tlockWaiting.classList.remove('hidden');
+    el.progressBar?.classList.add('hidden');
+    if (el.statusMessage) el.statusMessage.textContent = '';
   }
 
   function hideTlockWaiting(): void {
     if (__TLOCK__) tlockRecover?.stopWaiting();
-    elements.tlockWaiting?.classList.add('hidden');
-    if (elements.recoverBtn && !state.recoveryComplete) {
-      elements.recoverBtn.classList.remove('hidden');
-    }
-  }
-
-  function collapseInputSteps(): void {
-    elements.step1Card?.classList.add('collapsed');
-    elements.step2Card?.classList.add('collapsed');
+    el.tlockWaiting?.classList.add('hidden');
   }
 
   // ============================================
@@ -1192,13 +1367,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     if (state.recovering) return;
     state.recovering = true;
 
-    collapseInputSteps();
-
-    if (elements.recoverBtn) elements.recoverBtn.disabled = true;
-    elements.progressBar?.classList.remove('hidden');
-    if (elements.statusMessage) elements.statusMessage.className = 'status-message';
-    if (elements.filesList) elements.filesList.innerHTML = '';
-    elements.downloadActions?.classList.add('hidden');
+    el.progressBar?.classList.remove('hidden');
+    if (el.statusMessage) el.statusMessage.className = 'status-message';
+    if (el.filesList) el.filesList.innerHTML = '';
+    el.downloadActions?.classList.add('hidden');
 
     try {
       setProgress(10);
@@ -1212,7 +1384,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
 
       setProgress(30);
 
-      // age-decrypt (always a plain age file now)
+      // age-decrypt
       setStatus(t('decrypting'));
       let archive = await decrypt(state.manifest!, passphrase);
 
@@ -1232,7 +1404,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         const unlockDate = new Date(meta.unlock);
 
         if (unlockDate > new Date()) {
-          // Time lock hasn't passed — show waiting UI and start polling
           showTlockWaiting(unlockDate);
           tlockRecover.waitAndDecrypt(
             meta,
@@ -1242,7 +1413,7 @@ type UIShare = ParsedShare & { isHolder?: boolean };
               hideTlockWaiting();
               tlockContainerData = null;
               state.recovering = true;
-              elements.progressBar?.classList.remove('hidden');
+              el.progressBar?.classList.remove('hidden');
               try {
                 setProgress(60);
                 await finishRecovery(decryptedArchive);
@@ -1250,7 +1421,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
                 handleRecoveryError(err);
               } finally {
                 state.recovering = false;
-                if (elements.recoverBtn) elements.recoverBtn.disabled = false;
               }
             },
             (err) => {
@@ -1280,7 +1450,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       handleRecoveryError(err);
     } finally {
       state.recovering = false;
-      if (elements.recoverBtn) elements.recoverBtn.disabled = false;
     }
   }
 
@@ -1300,19 +1469,19 @@ type UIShare = ParsedShare & { isHolder?: boolean };
         <span class="name">${escapeHtml(file.name)}</span>
         <span class="size">${formatSize(file.data.length)}</span>
       `;
-      elements.filesList?.appendChild(item);
+      el.filesList?.appendChild(item);
     });
 
     setProgress(100);
     setStatus(t('complete'), 'success', t('complete_subtitle'));
-    elements.downloadActions?.classList.remove('hidden');
-    elements.recoverBtn?.classList.add('hidden');
+    el.downloadActions?.classList.remove('hidden');
     state.recoveryComplete = true;
 
-    // Update step 3 heading
-    const cards = document.querySelectorAll('.card');
-    const step3Title = cards[2]?.querySelector('[data-i18n="step3_title"]');
-    if (step3Title) step3Title.textContent = t('step3_complete_title');
+    // Update recovery title
+    if (el.recoveryTitle) {
+      const titleSpan = el.recoveryTitle.querySelector('[data-i18n="step3_title"]');
+      if (titleSpan) titleSpan.textContent = t('step3_complete_title');
+    }
   }
 
   function handleRecoveryError(err: unknown): void {
@@ -1335,9 +1504,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
       );
       setStatus(t('error', errorMsg), 'error');
     }
-
-    elements.step1Card?.classList.remove('collapsed');
-    elements.step2Card?.classList.remove('collapsed');
   }
 
   function handleTlockError(_err: unknown): void {
@@ -1367,9 +1533,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     setStatus(t('tlock_error_status'), 'error');
 
     state.recovering = false;
-    if (elements.recoverBtn) elements.recoverBtn.disabled = false;
-    elements.step1Card?.classList.remove('collapsed');
-    elements.step2Card?.classList.remove('collapsed');
   }
 
   function downloadTlockContainer(): void {
@@ -1383,22 +1546,26 @@ type UIShare = ParsedShare & { isHolder?: boolean };
     URL.revokeObjectURL(url);
   }
 
+  // ============================================
+  // Progress & Status
+  // ============================================
+
   function setProgress(percent: number): void {
-    const fill = elements.progressBar?.querySelector('.fill') as HTMLElement | null;
+    const fill = el.progressBar?.querySelector('.fill') as HTMLElement | null;
     if (fill) {
       fill.style.width = percent + '%';
     }
   }
 
   function setStatus(msg: string, type?: string, subtitle?: string): void {
-    if (elements.statusMessage) {
-      elements.statusMessage.textContent = msg;
-      elements.statusMessage.className = 'status-message' + (type ? ' ' + type : '');
+    if (el.statusMessage) {
+      el.statusMessage.textContent = msg;
+      el.statusMessage.className = 'status-message' + (type ? ' ' + type : '');
       if (subtitle) {
         const sub = document.createElement('span');
         sub.className = 'status-subtitle';
         sub.textContent = subtitle;
-        elements.statusMessage.appendChild(sub);
+        el.statusMessage.appendChild(sub);
       }
     }
   }
@@ -1410,7 +1577,6 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   function downloadAll(): void {
     if (!state.decryptedArchive) return;
 
-    // Detect archive format from magic bytes
     const archive = state.decryptedArchive;
     const isZip = archive.length >= 2 && archive[0] === 0x50 && archive[1] === 0x4B;
     const mimeType = isZip ? 'application/zip' : 'application/gzip';
@@ -1496,8 +1662,10 @@ type UIShare = ParsedShare & { isHolder?: boolean };
   // ============================================
 
   window.rememoryUpdateUI = function(): void {
-    updateSharesUI();
-    updateContactList();
+    // Re-render current wizard screen on language change
+    if (wizardScreen === 'welcome') setupWelcome();
+    if (wizardScreen === 'contacts') { renderContacts(); updateProgress(); }
+    if (wizardScreen === 'add-piece') setupAddPiece();
   };
 
   document.addEventListener('DOMContentLoaded', async () => {

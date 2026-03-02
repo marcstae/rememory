@@ -142,7 +142,6 @@ nix develop -c go mod verify
 | [`github.com/drand/tlock`](https://github.com/drand/tlock) | v1.2.0 | Time-lock encryption via drand | Yes — adds time-lock layer to manifest |
 | [`golang.org/x/text`](https://pkg.go.dev/golang.org/x/text) | v0.34.0 | Unicode normalization for BIP39 words | Yes — word decoding touches share data |
 | [`github.com/go-pdf/fpdf`](https://github.com/go-pdf/fpdf) | v0.9.0 | PDF generation for bundle README | Renders share words into PDF |
-| [`github.com/skip2/go-qrcode`](https://github.com/skip2/go-qrcode) | v0.0.0-20200617 | QR code generation for PDF | Encodes compact share into QR |
 | [`github.com/spf13/cobra`](https://github.com/spf13/cobra) | v1.10.2 | CLI framework | No |
 | [`gopkg.in/yaml.v3`](https://pkg.go.dev/gopkg.in/yaml.v3) | v3.0.1 | YAML parsing for project.yml | Reads project config |
 

@@ -35,7 +35,6 @@ Run this command inside a project directory (created with 'rememory init').`,
 }
 
 func init() {
-	sealCmd.Flags().String("recovery-url", core.DefaultRecoveryURL, "Base URL for QR code in PDF")
 	sealCmd.Flags().Bool("no-embed-manifest", false, "Do not embed MANIFEST.age in recover.html (it is embedded by default when 10 MB or less)")
 	sealCmd.Flags().String("timelock", "", "Time-lock duration or date (e.g., 5min, 30d, 6m, 1y, 2027-06-15T00:00:00Z)")
 	sealCmd.Flags().Bool("pages", false, "Generate a static pages directory (recover.html + MANIFEST.age) for hosting")
@@ -63,12 +62,11 @@ func runSeal(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid project: %w", err)
 	}
 
-	recoveryURL, _ := cmd.Flags().GetString("recovery-url")
 	noEmbedManifest, _ := cmd.Flags().GetBool("no-embed-manifest")
 	timelockStr, _ := cmd.Flags().GetString("timelock")
 	pages, _ := cmd.Flags().GetBool("pages")
 
-	if err := sealProject(p, recoveryURL, noEmbedManifest, timelockStr); err != nil {
+	if err := sealProject(p, noEmbedManifest, timelockStr); err != nil {
 		return err
 	}
 
@@ -86,10 +84,9 @@ func runSeal(cmd *cobra.Command, args []string) error {
 
 // sealProject archives, encrypts, splits, verifies, saves, and generates bundles
 // for an already-loaded project. Both runSeal and runDemo share this logic.
-// recoveryURL is the base URL for QR codes in the PDF. If empty, the PDF defaults to the production URL.
 // noEmbedManifest controls whether MANIFEST.age is embedded in recover.html.
 // timelockStr is an optional time-lock duration or date (e.g., "5min", "30d", "1y", "2027-06-15T00:00:00Z").
-func sealProject(p *project.Project, recoveryURL string, noEmbedManifest bool, timelockStr string) error {
+func sealProject(p *project.Project, noEmbedManifest bool, timelockStr string) error {
 	// Check manifest directory exists and has content
 	manifestDir := p.ManifestPath()
 	fileCount, err := manifest.CountFiles(manifestDir)
@@ -299,7 +296,6 @@ func sealProject(p *project.Project, recoveryURL string, noEmbedManifest bool, t
 
 	cfg := bundle.Config{
 		Version:         version,
-		RecoveryURL:     recoveryURL,
 		NoEmbedManifest: noEmbedManifest,
 		TlockEnabled:    tlockEnabled,
 	}

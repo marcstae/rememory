@@ -2,8 +2,6 @@ package pdf
 
 import (
 	"bytes"
-	"image/png"
-	"net/url"
 	"testing"
 	"time"
 
@@ -56,59 +54,6 @@ func TestGenerateReadmeAnonymous(t *testing.T) {
 	}
 }
 
-func TestQRContent(t *testing.T) {
-	data := testReadmeData()
-
-	// Without RecoveryURL set: defaults to production URL
-	content := data.QRContent()
-	expected := core.DefaultRecoveryURL + "#share=" + url.QueryEscape(data.Share.CompactEncode())
-	if content != expected {
-		t.Errorf("QRContent without URL: got %q, want %q", content, expected)
-	}
-}
-
-func TestQRContentWithRecoveryURL(t *testing.T) {
-	data := testReadmeData()
-	data.RecoveryURL = "https://example.com/recover.html"
-
-	content := data.QRContent()
-	expected := "https://example.com/recover.html#share=" + url.QueryEscape(data.Share.CompactEncode())
-	if content != expected {
-		t.Errorf("QRContent with URL: got %q, want %q", content, expected)
-	}
-}
-
-func TestQRCodeGeneratesValidPNG(t *testing.T) {
-	data := testReadmeData()
-
-	// Generate the PDF (which includes the QR code)
-	pdfBytes, err := GenerateReadme(data)
-	if err != nil {
-		t.Fatalf("GenerateReadme: %v", err)
-	}
-	if len(pdfBytes) == 0 {
-		t.Fatal("generated PDF is empty")
-	}
-
-	// Also verify the QR code PNG directly
-	qrContent := data.QRContent()
-	qrPNG, err := generateQRPNG(qrContent)
-	if err != nil {
-		t.Fatalf("generateQRPNG: %v", err)
-	}
-
-	// Verify it's a valid PNG
-	img, err := png.Decode(bytes.NewReader(qrPNG))
-	if err != nil {
-		t.Fatalf("QR code is not valid PNG: %v", err)
-	}
-
-	bounds := img.Bounds()
-	if bounds.Dx() == 0 || bounds.Dy() == 0 {
-		t.Error("QR code image has zero dimensions")
-	}
-}
-
 func TestWordGridNotSplitAcrossPages(t *testing.T) {
 	// Use a 33-byte share (produces 25 recovery words) with many friends
 	// to push content down the page and trigger the page-break logic.
@@ -146,39 +91,6 @@ func TestWordGridNotSplitAcrossPages(t *testing.T) {
 	}
 	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
 		t.Error("output does not start with PDF header")
-	}
-}
-
-func TestQRCodeContentMatchesCompact(t *testing.T) {
-	// Verify the QR content is the default URL with compact share in fragment
-	share := core.NewShare(1, 2, 5, 3, "Bob", []byte("another-share-data-for-testing"))
-	data := ReadmeData{
-		Share:     share,
-		Holder:    "Bob",
-		Threshold: 3,
-		Total:     5,
-	}
-
-	qrContent := data.QRContent()
-	compact := share.CompactEncode()
-	expected := core.DefaultRecoveryURL + "#share=" + url.QueryEscape(compact)
-
-	if qrContent != expected {
-		t.Errorf("QR content doesn't match expected URL:\n  got:  %q\n  want: %q", qrContent, expected)
-	}
-
-	// Verify the compact portion correctly round-trips
-	parsed, err := core.ParseCompact(compact)
-	if err != nil {
-		t.Fatalf("ParseCompact: %v", err)
-	}
-	if parsed.Index != share.Index || parsed.Total != share.Total || parsed.Threshold != share.Threshold {
-		t.Errorf("parsed share metadata mismatch: got %d/%d/%d, want %d/%d/%d",
-			parsed.Index, parsed.Total, parsed.Threshold,
-			share.Index, share.Total, share.Threshold)
-	}
-	if !bytes.Equal(parsed.Data, share.Data) {
-		t.Error("parsed share data mismatch")
 	}
 }
 

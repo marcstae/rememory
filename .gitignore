@@ -19,4 +19,6 @@
 /dist
 /maker.html
 .claude
+.vscode
+.playwright-mcp
 /rememory-data

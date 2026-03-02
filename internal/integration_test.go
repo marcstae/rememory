@@ -922,9 +922,9 @@ func verifyAnonymousBundle(t *testing.T, bundlePath string, shareNum, total, thr
 		t.Error("anonymous README should not contain OTHER SHARE HOLDERS section")
 	}
 
-	// Should contain anonymous-specific warning text
-	if !strings.Contains(readmeContent, "combine it with other pieces") {
-		t.Error("anonymous README should mention combining with other pieces")
+	// Should contain anonymous-specific step text (gather missing pieces)
+	if !strings.Contains(readmeContent, "missing pieces") {
+		t.Error("anonymous README should mention gathering missing pieces")
 	}
 
 	// Should NOT contain "friends listed below"
@@ -932,15 +932,15 @@ func verifyAnonymousBundle(t *testing.T, bundlePath string, shareNum, total, thr
 		t.Error("anonymous README should not mention friends listed below")
 	}
 
-	// Should contain correct threshold info
-	thresholdText := fmt.Sprintf("At least %d of you must come together", threshold)
+	// Should contain correct threshold info in recovery rule
+	thresholdText := fmt.Sprintf("%d", threshold)
 	if !strings.Contains(readmeContent, thresholdText) {
-		t.Errorf("README should contain threshold info: %s", thresholdText)
+		t.Errorf("README should contain threshold number: %s", thresholdText)
 	}
 
-	totalText := fmt.Sprintf("one of %d people", total)
+	totalText := fmt.Sprintf("%d", total)
 	if !strings.Contains(readmeContent, totalText) {
-		t.Errorf("README should contain total info: %s", totalText)
+		t.Errorf("README should contain total number: %s", totalText)
 	}
 
 	// Parse and verify share

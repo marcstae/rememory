@@ -7,7 +7,6 @@ require (
 	github.com/drand/tlock v1.2.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/hashicorp/vault v1.21.3
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/text v0.34.0
 	gopkg.in/yaml.v3 v3.0.1

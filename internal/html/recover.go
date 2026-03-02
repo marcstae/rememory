@@ -192,22 +192,7 @@ func GenerateRecoverHTML(personalization *PersonalizationData, opts ...RecoverHT
 		NavExtras: bundleNavHTML + `
       ` + navExtras,
 		BeforeContainer: `<!-- Toast notifications container -->
-  <div id="toast-container" class="toast-container" role="alert" aria-live="polite"></div>
-
-  <!-- QR Scanner modal -->
-  <div id="qr-scanner-modal" class="qr-scanner-modal hidden" role="dialog" aria-modal="true" aria-label="QR code scanner">
-    <div class="qr-scanner-header">
-      <span data-i18n="scan_title">Scan a QR code</span>
-      <button id="qr-scanner-close" class="qr-scanner-close" aria-label="Close">&times;</button>
-    </div>
-    <div class="qr-scanner-body">
-      <video id="qr-video" autoplay playsinline></video>
-      <div class="qr-scanner-overlay"></div>
-    </div>
-    <div class="qr-scanner-hint">
-      <span data-i18n="scan_hint">Point your camera at a QR code from a friend's PDF</span>
-    </div>
-  </div>`,
+  <div id="toast-container" class="toast-container" role="alert" aria-live="polite"></div>`,
 		Content: content,
 		FooterContent: `<p>ReMemory {{VERSION}}</p>
     <p>
